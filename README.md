@@ -172,3 +172,4 @@ Este proyecto es de uso personal.
 
 Para problemas o preguntas, revisa la documentación de la API en `http://localhost:8000/docs` cuando el backend esté ejecutándose.
 
+

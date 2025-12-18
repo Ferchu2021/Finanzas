@@ -212,3 +212,4 @@ def delete_proyeccion(db: Session, proyeccion_id: int):
         return True
     return False
 
+
