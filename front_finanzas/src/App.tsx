@@ -8,6 +8,7 @@ import Inversiones from './components/Inversiones'
 import Proyecciones from './components/Proyecciones'
 import Reportes from './components/Reportes'
 import Alertas from './components/Alertas'
+import ProcesarPDF from './components/ProcesarPDF'
 import './App.css'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
               <Link to="/proyecciones">Proyecciones</Link>
               <Link to="/reportes">Reportes</Link>
               <Link to="/alertas">Alertas</Link>
+              <Link to="/procesar-pdf">Procesar PDF</Link>
             </div>
           </div>
         </nav>
@@ -41,6 +43,7 @@ function App() {
             <Route path="/proyecciones" element={<Proyecciones />} />
             <Route path="/reportes" element={<Reportes />} />
             <Route path="/alertas" element={<Alertas />} />
+            <Route path="/procesar-pdf" element={<ProcesarPDF />} />
           </Routes>
         </main>
       </div>

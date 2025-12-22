@@ -214,3 +214,4 @@ class ProyeccionPago(ProyeccionPagoBase):
         from_attributes = True
 
 
+

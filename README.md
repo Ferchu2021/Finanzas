@@ -155,6 +155,10 @@ El sistema utiliza SQLite por defecto. La base de datos se crea automáticamente
 - `GET /api/alertas` - Obtener todas las alertas
 - `GET /api/alertas/tendencias` - Obtener análisis de tendencias
 
+### Procesamiento de PDFs
+- `POST /api/pdf/previsualizar` - Previsualizar datos extraídos de un PDF (sin guardar)
+- `POST /api/pdf/procesar-liquidacion?tarjeta_id={id}` - Procesar PDF de liquidación y guardar datos
+
 ## Desarrollo
 
 Para contribuir al proyecto:
@@ -167,6 +171,38 @@ Para contribuir al proyecto:
 ## Licencia
 
 Este proyecto es de uso personal.
+
+## Procesamiento de PDFs de Liquidaciones
+
+El sistema incluye funcionalidad para procesar automáticamente PDFs de liquidaciones mensuales de tarjetas de crédito.
+
+### Características
+
+- **Extracción automática de datos**: El sistema extrae automáticamente:
+  - Fecha de liquidación
+  - Monto total a pagar
+  - Monto mínimo
+  - Movimientos/transacciones individuales
+  - Información de la tarjeta (banco, número, etc.)
+
+- **Previsualización**: Antes de procesar, puedes previsualizar los datos extraídos para verificar que sean correctos
+
+- **Integración automática**: Al procesar un PDF:
+  - Se actualiza el saldo de la tarjeta
+  - Se crean gastos automáticamente para cada movimiento detectado
+  - Se registra el pago de la liquidación
+
+### Uso
+
+1. Ve a la sección "Procesar PDF" en el menú
+2. Selecciona la tarjeta correspondiente
+3. Sube el archivo PDF de la liquidación
+4. Haz clic en "Previsualizar" para ver los datos extraídos
+5. Revisa la información y haz clic en "Procesar PDF" para guardar
+
+### Formatos Soportados
+
+El sistema puede procesar PDFs de liquidaciones de diferentes bancos. Los formatos más comunes están soportados, pero si encuentras algún problema con un formato específico, puedes ajustar manualmente los datos después de procesar.
 
 ## Soporte
 

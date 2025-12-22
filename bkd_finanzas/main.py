@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import datetime, date
@@ -9,6 +9,7 @@ import schemas
 import crud
 import alerts
 import reports
+import pdf_processor
 
 app = FastAPI(title="Sistema de Gestión de Finanzas Personales")
 
@@ -197,6 +198,94 @@ def eliminar_proyeccion(proyeccion_id: int, db: Session = Depends(get_db)):
     if not crud.delete_proyeccion(db=db, proyeccion_id=proyeccion_id):
         raise HTTPException(status_code=404, detail="Proyección no encontrada")
     return {"message": "Proyección eliminada exitosamente"}
+
+
+# ========== PROCESAMIENTO DE PDFs ==========
+@app.post("/api/pdf/procesar-liquidacion")
+async def procesar_liquidacion_pdf(
+    tarjeta_id: int,
+    archivo: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """Procesa un PDF de liquidación de tarjeta y extrae la información"""
+    try:
+        # Verificar que la tarjeta existe
+        tarjeta = crud.get_tarjeta(db=db, tarjeta_id=tarjeta_id)
+        if not tarjeta:
+            raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
+        
+        # Verificar que es un PDF
+        if not archivo.filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
+        
+        # Procesar el PDF
+        datos = pdf_processor.procesar_pdf_liquidacion(archivo.file)
+        
+        # Actualizar saldo de la tarjeta si tenemos monto total
+        if datos.get('monto_total'):
+            nuevo_saldo = tarjeta.saldo_actual + datos['monto_total']
+            crud.update_tarjeta(
+                db=db,
+                tarjeta_id=tarjeta_id,
+                tarjeta=schemas.TarjetaCreditoUpdate(saldo_actual=nuevo_saldo)
+            )
+        
+        # Crear gastos para cada movimiento si existen
+        gastos_creados = []
+        if datos.get('movimientos'):
+            for movimiento in datos['movimientos']:
+                gasto = schemas.GastoCreate(
+                    fecha=movimiento['fecha'],
+                    monto=movimiento['monto'],
+                    moneda=tarjeta.moneda,
+                    tipo=models.TipoGasto.ORDINARIO,
+                    categoria="Tarjeta de Crédito",
+                    descripcion=f"{movimiento['descripcion']} - Liquidación {datos.get('fecha_liquidacion', '')}"
+                )
+                gasto_creado = crud.create_gasto(db=db, gasto=gasto)
+                gastos_creados.append(gasto_creado.id)
+        
+        # Crear pago de tarjeta si tenemos monto total
+        pago_creado = None
+        if datos.get('monto_total'):
+            from models import PagoTarjeta
+            pago = PagoTarjeta(
+                tarjeta_id=tarjeta_id,
+                fecha_pago=date.today(),
+                monto=datos['monto_total'],
+                descripcion=f"Liquidación procesada desde PDF - {archivo.filename}"
+            )
+            db.add(pago)
+            db.commit()
+            db.refresh(pago)
+            pago_creado = pago.id
+        
+        return {
+            "mensaje": "PDF procesado exitosamente",
+            "datos_extraidos": datos,
+            "gastos_creados": len(gastos_creados),
+            "pago_creado": pago_creado is not None,
+            "tarjeta_actualizada": True
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar PDF: {str(e)}")
+
+
+@app.post("/api/pdf/previsualizar")
+async def previsualizar_pdf(archivo: UploadFile = File(...)):
+    """Previsualiza los datos extraídos de un PDF sin guardarlos"""
+    try:
+        if not archivo.filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
+        
+        datos = pdf_processor.procesar_pdf_liquidacion(archivo.file)
+        return {
+            "datos_extraidos": datos,
+            "mensaje": "Datos extraídos correctamente. Revisa la información antes de guardar."
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar PDF: {str(e)}")
 
 
 # ========== REPORTES ==========
