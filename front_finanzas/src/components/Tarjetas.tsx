@@ -66,15 +66,19 @@ function Tarjetas() {
   }
 
   if (loading) {
-    return <div className="card">Cargando...</div>
+    return (
+      <div className="card">
+        <div className="loading">Cargando tarjetas...</div>
+      </div>
+    )
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1>Tarjetas de Crédito</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h1 style={{ margin: 0 }}>💳 Tarjetas de Crédito</h1>
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancelar' : '+ Nueva Tarjeta'}
+          {showForm ? '✕ Cancelar' : '+ Nueva Tarjeta'}
         </button>
       </div>
 
@@ -198,6 +202,7 @@ function Tarjetas() {
 }
 
 export default Tarjetas
+
 
 
 

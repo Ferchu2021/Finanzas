@@ -64,15 +64,19 @@ function Gastos() {
   }
 
   if (loading) {
-    return <div className="card">Cargando...</div>
+    return (
+      <div className="card">
+        <div className="loading">Cargando gastos...</div>
+      </div>
+    )
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1>Gastos</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h1 style={{ margin: 0 }}>💸 Gastos</h1>
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancelar' : '+ Nuevo Gasto'}
+          {showForm ? '✕ Cancelar' : '+ Nuevo Gasto'}
         </button>
       </div>
 
@@ -146,7 +150,11 @@ function Gastos() {
       <div className="card">
         <h2>Listado de Gastos</h2>
         {gastos.length === 0 ? (
-          <p>No hay gastos registrados</p>
+          <div className="empty-state">
+            <div className="empty-state-icon">📝</div>
+            <h3>No hay gastos registrados</h3>
+            <p>Comienza agregando tu primer gasto usando el botón "Nuevo Gasto"</p>
+          </div>
         ) : (
           <table className="table">
             <thead>
@@ -173,9 +181,10 @@ function Gastos() {
                     <button
                       className="btn btn-danger"
                       onClick={() => handleDelete(gasto.id)}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                      title="Eliminar gasto"
                     >
-                      Eliminar
+                      🗑️ Eliminar
                     </button>
                   </td>
                 </tr>
@@ -189,6 +198,7 @@ function Gastos() {
 }
 
 export default Gastos
+
 
 
 

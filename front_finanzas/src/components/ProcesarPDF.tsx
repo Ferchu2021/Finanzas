@@ -137,7 +137,7 @@ function ProcesarPDF() {
 
   return (
     <div>
-      <h1>Procesar Liquidaciones de Tarjetas (PDF)</h1>
+      <h1 style={{ marginBottom: '1.5rem' }}>📄 Procesar Liquidaciones de Tarjetas (PDF)</h1>
 
       <div className="card">
         <h2>Subir PDF de Liquidación</h2>
@@ -145,11 +145,11 @@ function ProcesarPDF() {
         <div className="form-group">
           <label>Seleccionar Tarjeta</label>
           {cargandoTarjetas ? (
-            <p>Cargando tarjetas...</p>
+            <div className="loading">Cargando tarjetas...</div>
           ) : tarjetas.length === 0 ? (
-            <p style={{ color: '#e74c3c' }}>
-              No hay tarjetas registradas. Por favor crea una tarjeta primero.
-            </p>
+            <div className="empty-state" style={{ padding: '1rem' }}>
+              <p>No hay tarjetas registradas. Por favor, crea una tarjeta primero.</p>
+            </div>
           ) : (
             <select
               value={tarjetaSeleccionada}
@@ -283,5 +283,6 @@ function ProcesarPDF() {
 }
 
 export default ProcesarPDF
+
 
 

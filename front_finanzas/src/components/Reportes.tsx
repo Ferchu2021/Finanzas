@@ -30,7 +30,7 @@ function Reportes() {
 
   return (
     <div>
-      <h1>Reportes</h1>
+      <h1 style={{ marginBottom: '1.5rem' }}>📊 Reportes</h1>
       
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2>Seleccionar Período</h2>
@@ -105,7 +105,10 @@ function Reportes() {
                   </tbody>
                 </table>
               ) : (
-                <p>No hay ingresos registrados</p>
+                <div className="empty-state">
+                  <div className="empty-state-icon">📊</div>
+                  <p>No hay ingresos registrados para este período</p>
+                </div>
               )}
             </div>
           )}
@@ -174,6 +177,7 @@ function Reportes() {
 }
 
 export default Reportes
+
 
 
 

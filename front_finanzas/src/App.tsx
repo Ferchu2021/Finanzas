@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import Ingresos from './components/Ingresos'
 import Gastos from './components/Gastos'
@@ -17,18 +17,18 @@ function App() {
       <div className="app">
         <nav className="navbar">
           <div className="nav-container">
-            <h1 className="nav-title">💰 Finanzas Personales</h1>
+            <h1 className="nav-title">Finanzas Personales</h1>
             <div className="nav-links">
-              <Link to="/">Dashboard</Link>
-              <Link to="/ingresos">Ingresos</Link>
-              <Link to="/gastos">Gastos</Link>
-              <Link to="/tarjetas">Tarjetas</Link>
-              <Link to="/prestamos">Préstamos</Link>
-              <Link to="/inversiones">Inversiones</Link>
-              <Link to="/proyecciones">Proyecciones</Link>
-              <Link to="/reportes">Reportes</Link>
-              <Link to="/alertas">Alertas</Link>
-              <Link to="/procesar-pdf">Procesar PDF</Link>
+              <NavLink to="/" end>Dashboard</NavLink>
+              <NavLink to="/ingresos">Ingresos</NavLink>
+              <NavLink to="/gastos">Gastos</NavLink>
+              <NavLink to="/tarjetas">Tarjetas</NavLink>
+              <NavLink to="/prestamos">Préstamos</NavLink>
+              <NavLink to="/inversiones">Inversiones</NavLink>
+              <NavLink to="/proyecciones">Proyecciones</NavLink>
+              <NavLink to="/reportes">Reportes</NavLink>
+              <NavLink to="/alertas">Alertas</NavLink>
+              <NavLink to="/procesar-pdf">Procesar PDF</NavLink>
             </div>
           </div>
         </nav>

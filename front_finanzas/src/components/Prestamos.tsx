@@ -68,15 +68,19 @@ function Prestamos() {
   }
 
   if (loading) {
-    return <div className="card">Cargando...</div>
+    return (
+      <div className="card">
+        <div className="loading">Cargando préstamos...</div>
+      </div>
+    )
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1>Préstamos</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h1 style={{ margin: 0 }}>🏦 Préstamos</h1>
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancelar' : '+ Nuevo Préstamo'}
+          {showForm ? '✕ Cancelar' : '+ Nuevo Préstamo'}
         </button>
       </div>
 
@@ -172,7 +176,11 @@ function Prestamos() {
       <div className="card">
         <h2>Listado de Préstamos</h2>
         {prestamos.length === 0 ? (
-          <p>No hay préstamos registrados</p>
+          <div className="empty-state">
+            <div className="empty-state-icon">🏦</div>
+            <h3>No hay préstamos registrados</h3>
+            <p>Comienza agregando tu primer préstamo usando el botón "Nuevo Préstamo"</p>
+          </div>
         ) : (
           <table className="table">
             <thead>
@@ -220,6 +228,7 @@ function Prestamos() {
 }
 
 export default Prestamos
+
 
 
 

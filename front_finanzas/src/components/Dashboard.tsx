@@ -35,15 +35,21 @@ function Dashboard() {
   }
 
   if (loading) {
-    return <div className="card">Cargando...</div>
+    return (
+      <div className="card">
+        <div className="loading">Cargando datos del dashboard...</div>
+      </div>
+    )
   }
 
   return (
     <div>
-      <h1>Dashboard</h1>
-      <p className="card" style={{ marginBottom: '1rem' }}>
-        Resumen del mes de {formatMonthYear(ano, mes)}
-      </p>
+      <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%)', border: '1px solid rgba(37, 99, 235, 0.2)' }}>
+        <h1 style={{ marginBottom: '0.5rem' }}>📊 Dashboard</h1>
+        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+          Resumen del mes de <strong>{formatMonthYear(ano, mes)}</strong>
+        </p>
+      </div>
 
       {alertas.length > 0 && (
         <div className="card">
@@ -54,6 +60,13 @@ function Dashboard() {
               <p>{alerta.mensaje}</p>
             </div>
           ))}
+        </div>
+      )}
+      
+      {alertas.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✅</div>
+          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>No hay alertas pendientes</p>
         </div>
       )}
 
@@ -104,7 +117,10 @@ function Dashboard() {
                 </tbody>
               </table>
             ) : (
-              <p>No hay ingresos registrados este mes</p>
+              <div className="empty-state">
+                <div className="empty-state-icon">📊</div>
+                <p>No hay ingresos registrados este mes</p>
+              </div>
             )}
           </div>
 

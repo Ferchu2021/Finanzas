@@ -38,12 +38,16 @@ function Alertas() {
   }
 
   if (loading) {
-    return <div className="card">Cargando...</div>
+    return (
+      <div className="card">
+        <div className="loading">Cargando alertas...</div>
+      </div>
+    )
   }
 
   return (
     <div>
-      <h1>Alertas y Tendencias</h1>
+      <h1 style={{ marginBottom: '1.5rem' }}>⚠️ Alertas y Tendencias</h1>
 
       {tendencias && (
         <div className="card">
@@ -91,6 +95,7 @@ function Alertas() {
 }
 
 export default Alertas
+
 
 
 

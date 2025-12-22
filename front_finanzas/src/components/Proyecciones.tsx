@@ -62,15 +62,19 @@ function Proyecciones() {
   }
 
   if (loading) {
-    return <div className="card">Cargando...</div>
+    return (
+      <div className="card">
+        <div className="loading">Cargando proyecciones...</div>
+      </div>
+    )
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1>Proyecciones de Pagos</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h1 style={{ margin: 0 }}>📅 Proyecciones de Pagos</h1>
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancelar' : '+ Nueva Proyección'}
+          {showForm ? '✕ Cancelar' : '+ Nueva Proyección'}
         </button>
       </div>
 
@@ -188,6 +192,7 @@ function Proyecciones() {
 }
 
 export default Proyecciones
+
 
 
 

@@ -68,15 +68,19 @@ function Ingresos() {
   }
 
   if (loading) {
-    return <div className="card">Cargando...</div>
+    return (
+      <div className="card">
+        <div className="loading">Cargando ingresos...</div>
+      </div>
+    )
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h1>Ingresos</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <h1 style={{ margin: 0 }}>💵 Ingresos</h1>
         <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancelar' : '+ Nuevo Ingreso'}
+          {showForm ? '✕ Cancelar' : '+ Nuevo Ingreso'}
         </button>
       </div>
 
@@ -141,7 +145,11 @@ function Ingresos() {
       <div className="card">
         <h2>Listado de Ingresos</h2>
         {ingresos.length === 0 ? (
-          <p>No hay ingresos registrados</p>
+          <div className="empty-state">
+            <div className="empty-state-icon">💰</div>
+            <h3>No hay ingresos registrados</h3>
+            <p>Comienza agregando tu primer ingreso usando el botón "Nuevo Ingreso"</p>
+          </div>
         ) : (
           <table className="table">
             <thead>
@@ -166,9 +174,10 @@ function Ingresos() {
                     <button
                       className="btn btn-danger"
                       onClick={() => handleDelete(ingreso.id)}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                      title="Eliminar ingreso"
                     >
-                      Eliminar
+                      🗑️ Eliminar
                     </button>
                   </td>
                 </tr>
@@ -182,6 +191,7 @@ function Ingresos() {
 }
 
 export default Ingresos
+
 
 
 
