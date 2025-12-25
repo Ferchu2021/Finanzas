@@ -295,3 +295,5 @@ def analizar_tendencias(db: Session) -> Dict:
 
 
 
+
+

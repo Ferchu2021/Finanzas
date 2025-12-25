@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom'
+import React from 'react'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import Ingresos from './components/Ingresos'
 import Gastos from './components/Gastos'
@@ -17,24 +18,26 @@ function App() {
       <div className="app">
         <nav className="navbar">
           <div className="nav-container">
-            <h1 className="nav-title">Finanzas Personales</h1>
-            <div className="nav-links">
-              <NavLink to="/" end>Dashboard</NavLink>
-              <NavLink to="/ingresos">Ingresos</NavLink>
-              <NavLink to="/gastos">Gastos</NavLink>
-              <NavLink to="/tarjetas">Tarjetas</NavLink>
-              <NavLink to="/prestamos">Préstamos</NavLink>
-              <NavLink to="/inversiones">Inversiones</NavLink>
-              <NavLink to="/proyecciones">Proyecciones</NavLink>
-              <NavLink to="/reportes">Reportes</NavLink>
-              <NavLink to="/alertas">Alertas</NavLink>
-              <NavLink to="/procesar-pdf">Procesar PDF</NavLink>
-            </div>
+            <h1 className="nav-title">💰 Finanzas Personales</h1>
+            <ul className="nav-menu">
+              <li><Link to="/dashboard">Dashboard</Link></li>
+              <li><Link to="/ingresos">Ingresos</Link></li>
+              <li><Link to="/gastos">Gastos</Link></li>
+              <li><Link to="/tarjetas">Tarjetas</Link></li>
+              <li><Link to="/prestamos">Préstamos</Link></li>
+              <li><Link to="/inversiones">Inversiones</Link></li>
+              <li><Link to="/proyecciones">Proyecciones</Link></li>
+              <li><Link to="/reportes">Reportes</Link></li>
+              <li><Link to="/alertas">Alertas</Link></li>
+              <li><Link to="/procesar-pdf">Procesar PDF</Link></li>
+            </ul>
           </div>
         </nav>
+
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/ingresos" element={<Ingresos />} />
             <Route path="/gastos" element={<Gastos />} />
             <Route path="/tarjetas" element={<Tarjetas />} />
@@ -52,5 +55,3 @@ function App() {
 }
 
 export default App
-
-

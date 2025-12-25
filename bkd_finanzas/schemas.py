@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import date
 from typing import Optional
 from models import TipoIngreso, TipoGasto, TipoMoneda
@@ -28,9 +28,7 @@ class IngresoUpdate(BaseModel):
 class Ingreso(IngresoBase):
     id: int
     created_at: date
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== GASTOS ==========
@@ -59,9 +57,7 @@ class GastoUpdate(BaseModel):
 class Gasto(GastoBase):
     id: int
     created_at: date
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== TARJETAS DE CRÉDITO ==========
@@ -92,9 +88,7 @@ class TarjetaCredito(TarjetaCreditoBase):
     id: int
     saldo_actual: float
     created_at: date
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PagoTarjetaCreate(BaseModel):
@@ -140,9 +134,7 @@ class Prestamo(PrestamoBase):
     monto_pagado: float
     activo: bool
     created_at: date
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PagoPrestamoCreate(BaseModel):
@@ -186,9 +178,7 @@ class Inversion(InversionBase):
     monto_actual: Optional[float]
     activa: bool
     created_at: date
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== PROYECCIONES ==========
@@ -209,9 +199,8 @@ class ProyeccionPago(ProyeccionPagoBase):
     id: int
     pagado: bool
     created_at: date
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
 
 
 

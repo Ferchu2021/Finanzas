@@ -1,198 +1,284 @@
-import { useEffect, useState } from 'react'
-import { proyeccionesApi, ProyeccionPago, ProyeccionPagoCreate } from '../services/api'
+import React, { useState, useEffect } from 'react'
+import api from '../services/api'
 
-function Proyecciones() {
-  const [proyecciones, setProyecciones] = useState<ProyeccionPago[]>([])
+interface ProyeccionTarjeta {
+  mes: string
+  fecha_vencimiento: string
+  cantidad_cuotas: number
+  total_ars: number
+  total_usd: number
+  detalle: Array<{
+    tarjeta_id: number
+    tarjeta_nombre: string
+    tarjeta_banco?: string
+    fecha_cierre: string
+    fecha_vencimiento: string
+    monto_estimado: number
+    moneda: string
+  }>
+}
+
+const Proyecciones: React.FC = () => {
+  const [proyecciones, setProyecciones] = useState<ProyeccionTarjeta[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState<ProyeccionPagoCreate>({
-    tipo: '',
-    entidad_id: undefined,
-    fecha_vencimiento: new Date().toISOString().split('T')[0],
-    monto_estimado: 0,
-    moneda: 'ARS',
-    descripcion: ''
-  })
+  const [error, setError] = useState<string | null>(null)
+  const [meses, setMeses] = useState(6)
 
   useEffect(() => {
     cargarProyecciones()
-  }, [])
+  }, [meses])
 
   const cargarProyecciones = async () => {
     try {
       setLoading(true)
-      const response = await proyeccionesApi.getAll()
+      const response = await api.get(`/proyecciones/tarjetas?meses=${meses}`)
       setProyecciones(response.data)
-    } catch (error) {
-      console.error('Error cargando proyecciones:', error)
+      setError(null)
+    } catch (err: any) {
+      setError('Error al cargar las proyecciones: ' + (err.message || 'Error desconocido'))
+      console.error('Error al cargar proyecciones:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      await proyeccionesApi.create(formData)
-      setShowForm(false)
-      setFormData({
-        tipo: '',
-        entidad_id: undefined,
-        fecha_vencimiento: new Date().toISOString().split('T')[0],
-        monto_estimado: 0,
-        moneda: 'ARS',
-        descripcion: ''
-      })
-      cargarProyecciones()
-    } catch (error) {
-      console.error('Error creando proyección:', error)
-      alert('Error al crear la proyección')
-    }
+  const formatearMonto = (monto: number, moneda: string): string => {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: moneda === 'USD' ? 'USD' : 'ARS',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(monto)
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Estás seguro de eliminar esta proyección?')) return
-    try {
-      await proyeccionesApi.delete(id)
-      cargarProyecciones()
-    } catch (error) {
-      console.error('Error eliminando proyección:', error)
-      alert('Error al eliminar la proyección')
-    }
+  const formatearFecha = (fechaStr: string): string => {
+    const fecha = new Date(fechaStr)
+    return fecha.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+
+  const formatearMes = (mesStr: string): string => {
+    const [ano, mes] = mesStr.split('-')
+    const fecha = new Date(parseInt(ano), parseInt(mes) - 1, 1)
+    return fecha.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
   }
 
   if (loading) {
     return (
-      <div className="card">
-        <div className="loading">Cargando proyecciones...</div>
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Cargando proyecciones...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '2rem', color: 'red' }}>
+        <p>{error}</p>
+        <button onClick={cargarProyecciones}>Reintentar</button>
       </div>
     )
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <h1 style={{ margin: 0 }}>📅 Proyecciones de Pagos</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? '✕ Cancelar' : '+ Nueva Proyección'}
-        </button>
+    <div style={{ padding: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h1>Proyecciones de Pagos - Tarjetas de Crédito</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <label htmlFor="meses">Meses a proyectar:</label>
+          <select
+            id="meses"
+            value={meses}
+            onChange={(e) => setMeses(parseInt(e.target.value))}
+            style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+          >
+            <option value={3}>3 meses</option>
+            <option value={6}>6 meses</option>
+            <option value={12}>12 meses</option>
+          </select>
+        </div>
       </div>
 
-      {showForm && (
-        <div className="card">
-          <h2>Nueva Proyección de Pago</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Tipo</label>
-              <select
-                value={formData.tipo}
-                onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                required
-              >
-                <option value="">Seleccionar...</option>
-                <option value="tarjeta">Tarjeta de Crédito</option>
-                <option value="prestamo">Préstamo</option>
-                <option value="gasto_fijo">Gasto Fijo</option>
-                <option value="otro">Otro</option>
-              </select>
+      {proyecciones.length === 0 ? (
+        <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#fff', borderRadius: '8px', marginTop: '1rem' }}>
+          <p>No hay proyecciones de pagos de tarjetas para los próximos meses</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '1.5rem' }}>
+          {proyecciones.map((proyeccion, index) => (
+            <div
+              key={index}
+              style={{
+                backgroundColor: '#fff',
+                padding: '1.5rem',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '2px solid #ecf0f1' }}>
+                <div>
+                  <h2 style={{ margin: 0, color: '#2c3e50', textTransform: 'capitalize' }}>
+                    {formatearMes(proyeccion.mes)}
+                  </h2>
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#7f8c8d', fontSize: '0.9rem' }}>
+                    Vencimiento: {formatearFecha(proyeccion.fecha_vencimiento)}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: '#7f8c8d' }}>
+                    {proyeccion.cantidad_cuotas} {proyeccion.cantidad_cuotas === 1 ? 'cuota' : 'cuotas'}
+                  </p>
+                  {proyeccion.total_ars > 0 && (
+                    <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold', color: '#e74c3c' }}>
+                      {formatearMonto(proyeccion.total_ars, 'ARS')}
+                    </p>
+                  )}
+                  {proyeccion.total_usd > 0 && (
+                    <p style={{ margin: '0.25rem 0 0 0', fontSize: '1.25rem', fontWeight: 'bold', color: '#3498db' }}>
+                      {formatearMonto(proyeccion.total_usd, 'USD')}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                {proyeccion.detalle.map((detalle, detalleIndex) => {
+                  const diasRestantes = Math.ceil((new Date(detalle.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                  
+                  return (
+                    <div
+                      key={detalleIndex}
+                      style={{
+                        padding: '1.25rem',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '8px',
+                        borderLeft: '4px solid #3498db',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                        <div style={{ flex: 1 }}>
+                          <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#2c3e50', fontWeight: '600' }}>
+                            {detalle.tarjeta_nombre}
+                            {detalle.tarjeta_banco && (
+                              <span style={{ fontSize: '0.9rem', color: '#7f8c8d', marginLeft: '0.5rem', fontWeight: 'normal' }}>
+                                ({detalle.tarjeta_banco})
+                              </span>
+                            )}
+                          </h3>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginTop: '0.75rem' }}>
+                            <div>
+                              <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                Fecha de Cierre
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.95rem', color: '#2c3e50', fontWeight: '500' }}>
+                                {formatearFecha(detalle.fecha_cierre)}
+                              </p>
+                            </div>
+                            <div>
+                              <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                Fecha de Vencimiento
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.95rem', color: '#2c3e50', fontWeight: '500' }}>
+                                {formatearFecha(detalle.fecha_vencimiento)}
+                              </p>
+                            </div>
+                            <div>
+                              <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                Días Restantes
+                              </p>
+                              <p style={{ 
+                                margin: 0, 
+                                fontSize: '0.95rem', 
+                                color: diasRestantes <= 7 ? '#e74c3c' : diasRestantes <= 15 ? '#f39c12' : '#27ae60',
+                                fontWeight: '600'
+                              }}>
+                                {diasRestantes} {diasRestantes === 1 ? 'día' : 'días'}
+                              </p>
+                            </div>
+                            <div>
+                              <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                Moneda
+                              </p>
+                              <p style={{ margin: 0, fontSize: '0.95rem', color: '#2c3e50', fontWeight: '500' }}>
+                                {detalle.moneda}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', marginLeft: '1.5rem' }}>
+                          <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Monto a Pagar
+                          </p>
+                          <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold', color: '#e74c3c' }}>
+                            {formatearMonto(detalle.monto_estimado, detalle.moneda)}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {diasRestantes <= 7 && (
+                        <div style={{
+                          marginTop: '1rem',
+                          padding: '0.75rem',
+                          backgroundColor: '#fee',
+                          borderRadius: '6px',
+                          border: '1px solid #fcc',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem'
+                        }}>
+                          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                          <p style={{ margin: 0, fontSize: '0.9rem', color: '#c0392b' }}>
+                            <strong>Atención:</strong> Esta cuota vence en {diasRestantes} {diasRestantes === 1 ? 'día' : 'días'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-            <div className="form-group">
-              <label>ID de Entidad (opcional)</label>
-              <input
-                type="number"
-                value={formData.entidad_id || ''}
-                onChange={(e) => setFormData({ ...formData, entidad_id: e.target.value ? parseInt(e.target.value) : undefined })}
-              />
-            </div>
-            <div className="form-group">
-              <label>Fecha de Vencimiento</label>
-              <input
-                type="date"
-                value={formData.fecha_vencimiento}
-                onChange={(e) => setFormData({ ...formData, fecha_vencimiento: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>Monto Estimado</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.monto_estimado}
-                onChange={(e) => setFormData({ ...formData, monto_estimado: parseFloat(e.target.value) })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>Moneda</label>
-              <select
-                value={formData.moneda}
-                onChange={(e) => setFormData({ ...formData, moneda: e.target.value as 'ARS' | 'USD' })}
-                required
-              >
-                <option value="ARS">Pesos (ARS)</option>
-                <option value="USD">Dólares (USD)</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Descripción</label>
-              <textarea
-                value={formData.descripcion}
-                onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-              />
-            </div>
-            <button type="submit" className="btn btn-primary">Guardar</button>
-          </form>
+          ))}
         </div>
       )}
 
-      <div className="card">
-        <h2>Listado de Proyecciones</h2>
-        {proyecciones.length === 0 ? (
-          <p>No hay proyecciones registradas</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Fecha Vencimiento</th>
-                <th>Monto Estimado</th>
-                <th>Moneda</th>
-                <th>Descripción</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {proyecciones.map(proyeccion => (
-                <tr key={proyeccion.id}>
-                  <td>{proyeccion.tipo}</td>
-                  <td>{new Date(proyeccion.fecha_vencimiento).toLocaleDateString('es-AR')}</td>
-                  <td>${proyeccion.monto_estimado.toLocaleString('es-AR')}</td>
-                  <td>{proyeccion.moneda}</td>
-                  <td>{proyeccion.descripcion || '-'}</td>
-                  <td>{proyeccion.pagado ? 'Pagado' : 'Pendiente'}</td>
-                  <td>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => handleDelete(proyeccion.id)}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {proyecciones.length > 0 && (
+        <div style={{
+          marginTop: '2rem',
+          padding: '1.5rem',
+          backgroundColor: '#2c3e50',
+          color: '#fff',
+          borderRadius: '8px',
+          textAlign: 'center'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0' }}>Resumen Total</h3>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap' }}>
+            {proyecciones.reduce((sum, p) => sum + p.total_ars, 0) > 0 && (
+              <div>
+                <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total ARS</p>
+                <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                  {formatearMonto(proyecciones.reduce((sum, p) => sum + p.total_ars, 0), 'ARS')}
+                </p>
+              </div>
+            )}
+            {proyecciones.reduce((sum, p) => sum + p.total_usd, 0) > 0 && (
+              <div>
+                <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total USD</p>
+                <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                  {formatearMonto(proyecciones.reduce((sum, p) => sum + p.total_usd, 0), 'USD')}
+                </p>
+              </div>
+            )}
+            <div>
+              <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total de Cuotas</p>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                {proyecciones.reduce((sum, p) => sum + p.cantidad_cuotas, 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 export default Proyecciones
-
-
-
-

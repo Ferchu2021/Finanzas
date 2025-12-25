@@ -1,18 +1,10 @@
-import { useEffect, useState } from 'react'
-import { tarjetasApi, TarjetaCredito, TarjetaCreditoCreate } from '../services/api'
+import React, { useState, useEffect } from 'react'
+import { tarjetasApi, TarjetaCredito } from '../services/api'
 
-function Tarjetas() {
+const Tarjetas: React.FC = () => {
   const [tarjetas, setTarjetas] = useState<TarjetaCredito[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [formData, setFormData] = useState<TarjetaCreditoCreate>({
-    nombre: '',
-    banco: '',
-    limite: 0,
-    moneda: 'ARS',
-    fecha_cierre: 1,
-    fecha_vencimiento: 1
-  })
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     cargarTarjetas()
@@ -23,186 +15,155 @@ function Tarjetas() {
       setLoading(true)
       const response = await tarjetasApi.getAll()
       setTarjetas(response.data)
-    } catch (error) {
-      console.error('Error cargando tarjetas:', error)
+      setError(null)
+    } catch (err: any) {
+      setError('Error al cargar las tarjetas: ' + (err.message || 'Error desconocido'))
+      console.error('Error al cargar tarjetas:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      await tarjetasApi.create(formData)
-      setShowForm(false)
-      setFormData({
-        nombre: '',
-        banco: '',
-        limite: 0,
-        moneda: 'ARS',
-        fecha_cierre: 1,
-        fecha_vencimiento: 1
-      })
-      cargarTarjetas()
-    } catch (error) {
-      console.error('Error creando tarjeta:', error)
-      alert('Error al crear la tarjeta')
-    }
+  const calcularPorcentajeUso = (saldo: number, limite: number): number => {
+    if (limite === 0) return 0
+    return (saldo / limite) * 100
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Estás seguro de eliminar esta tarjeta?')) return
-    try {
-      await tarjetasApi.delete(id)
-      cargarTarjetas()
-    } catch (error) {
-      console.error('Error eliminando tarjeta:', error)
-      alert('Error al eliminar la tarjeta')
-    }
-  }
-
-  const getPorcentajeUso = (tarjeta: TarjetaCredito) => {
-    return tarjeta.limite > 0 ? (tarjeta.saldo_actual / tarjeta.limite) * 100 : 0
+  const formatearMonto = (monto: number, moneda: string): string => {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: moneda === 'USD' ? 'USD' : 'ARS',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(monto)
   }
 
   if (loading) {
     return (
-      <div className="card">
-        <div className="loading">Cargando tarjetas...</div>
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Cargando tarjetas...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '2rem', color: 'red' }}>
+        <p>{error}</p>
+        <button onClick={cargarTarjetas}>Reintentar</button>
       </div>
     )
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <h1 style={{ margin: 0 }}>💳 Tarjetas de Crédito</h1>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? '✕ Cancelar' : '+ Nueva Tarjeta'}
-        </button>
-      </div>
+    <div style={{ padding: '2rem' }}>
+      <h1>Tarjetas de Crédito</h1>
+      
+      {tarjetas.length === 0 ? (
+        <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#fff', borderRadius: '8px', marginTop: '1rem' }}>
+          <p>No hay tarjetas registradas</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '1.5rem', marginTop: '1.5rem' }}>
+          {tarjetas.map((tarjeta) => {
+            const porcentajeUso = calcularPorcentajeUso(tarjeta.saldo_actual, tarjeta.limite)
+            const disponible = tarjeta.limite - tarjeta.saldo_actual
+            const nivelAlerta = porcentajeUso > 90 ? 'alta' : porcentajeUso > 80 ? 'media' : 'normal'
 
-      {showForm && (
-        <div className="card">
-          <h2>Nueva Tarjeta de Crédito</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Nombre</label>
-              <input
-                type="text"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>Banco</label>
-              <input
-                type="text"
-                value={formData.banco}
-                onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-              />
-            </div>
-            <div className="form-group">
-              <label>Límite</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.limite}
-                onChange={(e) => setFormData({ ...formData, limite: parseFloat(e.target.value) })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>Moneda</label>
-              <select
-                value={formData.moneda}
-                onChange={(e) => setFormData({ ...formData, moneda: e.target.value as 'ARS' | 'USD' })}
-                required
+            return (
+              <div
+                key={tarjeta.id}
+                style={{
+                  backgroundColor: '#fff',
+                  padding: '1.5rem',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                  border: nivelAlerta === 'alta' ? '2px solid #e74c3c' : nivelAlerta === 'media' ? '2px solid #f39c12' : '1px solid #ddd'
+                }}
               >
-                <option value="ARS">Pesos (ARS)</option>
-                <option value="USD">Dólares (USD)</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Día de Cierre</label>
-              <input
-                type="number"
-                min="1"
-                max="31"
-                value={formData.fecha_cierre}
-                onChange={(e) => setFormData({ ...formData, fecha_cierre: parseInt(e.target.value) })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>Día de Vencimiento</label>
-              <input
-                type="number"
-                min="1"
-                max="31"
-                value={formData.fecha_vencimiento}
-                onChange={(e) => setFormData({ ...formData, fecha_vencimiento: parseInt(e.target.value) })}
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn-primary">Guardar</button>
-          </form>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                  <div>
+                    <h2 style={{ margin: '0 0 0.5rem 0', color: '#2c3e50' }}>{tarjeta.nombre}</h2>
+                    {tarjeta.banco && (
+                      <p style={{ margin: 0, color: '#7f8c8d', fontSize: '0.9rem' }}>Banco: {tarjeta.banco}</p>
+                    )}
+                    <p style={{ margin: '0.5rem 0 0 0', color: '#7f8c8d', fontSize: '0.9rem' }}>
+                      Cierre: día {tarjeta.fecha_cierre} | Vencimiento: día {tarjeta.fecha_vencimiento}
+                    </p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '12px',
+                      fontSize: '0.85rem',
+                      fontWeight: 'bold',
+                      backgroundColor: nivelAlerta === 'alta' ? '#e74c3c' : nivelAlerta === 'media' ? '#f39c12' : '#27ae60',
+                      color: '#fff'
+                    }}>
+                      {porcentajeUso.toFixed(1)}% usado
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+                  <div>
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: '#7f8c8d' }}>Límite</p>
+                    <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: '#2c3e50' }}>
+                      {formatearMonto(tarjeta.limite, tarjeta.moneda)}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: '#7f8c8d' }}>Saldo Actual</p>
+                    <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: porcentajeUso > 80 ? '#e74c3c' : '#2c3e50' }}>
+                      {formatearMonto(tarjeta.saldo_actual, tarjeta.moneda)}
+                    </p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: '#7f8c8d' }}>Disponible</p>
+                    <p style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: '#27ae60' }}>
+                      {formatearMonto(disponible, tarjeta.moneda)}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: '#ecf0f1',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div
+                      style={{
+                        width: `${Math.min(porcentajeUso, 100)}%`,
+                        height: '100%',
+                        backgroundColor: nivelAlerta === 'alta' ? '#e74c3c' : nivelAlerta === 'media' ? '#f39c12' : '#27ae60',
+                        transition: 'width 0.3s ease'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {nivelAlerta !== 'normal' && (
+                  <div style={{
+                    marginTop: '1rem',
+                    padding: '0.75rem',
+                    backgroundColor: nivelAlerta === 'alta' ? '#fee' : '#fff3cd',
+                    borderRadius: '4px',
+                    fontSize: '0.9rem',
+                    color: nivelAlerta === 'alta' ? '#c0392b' : '#856404'
+                  }}>
+                    ⚠️ {nivelAlerta === 'alta' ? 'Alerta: Uso muy alto de la tarjeta' : 'Atención: Uso elevado de la tarjeta'}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
-
-      <div className="card">
-        <h2>Listado de Tarjetas</h2>
-        {tarjetas.length === 0 ? (
-          <p>No hay tarjetas registradas</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Banco</th>
-                <th>Límite</th>
-                <th>Saldo Actual</th>
-                <th>% Uso</th>
-                <th>Moneda</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tarjetas.map(tarjeta => {
-                const porcentaje = getPorcentajeUso(tarjeta)
-                return (
-                  <tr key={tarjeta.id}>
-                    <td>{tarjeta.nombre}</td>
-                    <td>{tarjeta.banco || '-'}</td>
-                    <td>${tarjeta.limite.toLocaleString('es-AR')}</td>
-                    <td>${tarjeta.saldo_actual.toLocaleString('es-AR')}</td>
-                    <td style={{ color: porcentaje > 80 ? '#e74c3c' : porcentaje > 60 ? '#f39c12' : '#27ae60' }}>
-                      {porcentaje.toFixed(1)}%
-                    </td>
-                    <td>{tarjeta.moneda}</td>
-                    <td>
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleDelete(tarjeta.id)}
-                        style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
-                      >
-                        Eliminar
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
     </div>
   )
 }
 
 export default Tarjetas
-
-
-
-

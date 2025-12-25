@@ -8,7 +8,7 @@ import schemas
 
 # ========== INGRESOS ==========
 def create_ingreso(db: Session, ingreso: schemas.IngresoCreate):
-    db_ingreso = models.Ingreso(**ingreso.dict())
+    db_ingreso = models.Ingreso(**ingreso.model_dump())
     db.add(db_ingreso)
     db.commit()
     db.refresh(db_ingreso)
@@ -26,7 +26,7 @@ def get_ingreso(db: Session, ingreso_id: int):
 def update_ingreso(db: Session, ingreso_id: int, ingreso: schemas.IngresoUpdate):
     db_ingreso = get_ingreso(db, ingreso_id)
     if db_ingreso:
-        update_data = ingreso.dict(exclude_unset=True)
+        update_data = ingreso.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_ingreso, key, value)
         db.commit()
@@ -45,7 +45,7 @@ def delete_ingreso(db: Session, ingreso_id: int):
 
 # ========== GASTOS ==========
 def create_gasto(db: Session, gasto: schemas.GastoCreate):
-    db_gasto = models.Gasto(**gasto.dict())
+    db_gasto = models.Gasto(**gasto.model_dump())
     db.add(db_gasto)
     db.commit()
     db.refresh(db_gasto)
@@ -63,7 +63,7 @@ def get_gasto(db: Session, gasto_id: int):
 def update_gasto(db: Session, gasto_id: int, gasto: schemas.GastoUpdate):
     db_gasto = get_gasto(db, gasto_id)
     if db_gasto:
-        update_data = gasto.dict(exclude_unset=True)
+        update_data = gasto.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_gasto, key, value)
         db.commit()
@@ -82,7 +82,7 @@ def delete_gasto(db: Session, gasto_id: int):
 
 # ========== TARJETAS DE CRÉDITO ==========
 def create_tarjeta(db: Session, tarjeta: schemas.TarjetaCreditoCreate):
-    db_tarjeta = models.TarjetaCredito(**tarjeta.dict())
+    db_tarjeta = models.TarjetaCredito(**tarjeta.model_dump())
     db.add(db_tarjeta)
     db.commit()
     db.refresh(db_tarjeta)
@@ -100,7 +100,7 @@ def get_tarjeta(db: Session, tarjeta_id: int):
 def update_tarjeta(db: Session, tarjeta_id: int, tarjeta: schemas.TarjetaCreditoUpdate):
     db_tarjeta = get_tarjeta(db, tarjeta_id)
     if db_tarjeta:
-        update_data = tarjeta.dict(exclude_unset=True)
+        update_data = tarjeta.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_tarjeta, key, value)
         db.commit()
@@ -119,7 +119,7 @@ def delete_tarjeta(db: Session, tarjeta_id: int):
 
 # ========== PRÉSTAMOS ==========
 def create_prestamo(db: Session, prestamo: schemas.PrestamoCreate):
-    db_prestamo = models.Prestamo(**prestamo.dict())
+    db_prestamo = models.Prestamo(**prestamo.model_dump())
     db.add(db_prestamo)
     db.commit()
     db.refresh(db_prestamo)
@@ -137,7 +137,7 @@ def get_prestamo(db: Session, prestamo_id: int):
 def update_prestamo(db: Session, prestamo_id: int, prestamo: schemas.PrestamoUpdate):
     db_prestamo = get_prestamo(db, prestamo_id)
     if db_prestamo:
-        update_data = prestamo.dict(exclude_unset=True)
+        update_data = prestamo.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_prestamo, key, value)
         db.commit()
@@ -156,7 +156,7 @@ def delete_prestamo(db: Session, prestamo_id: int):
 
 # ========== INVERSIONES ==========
 def create_inversion(db: Session, inversion: schemas.InversionCreate):
-    db_inversion = models.Inversion(**inversion.dict())
+    db_inversion = models.Inversion(**inversion.model_dump())
     db.add(db_inversion)
     db.commit()
     db.refresh(db_inversion)
@@ -174,7 +174,7 @@ def get_inversion(db: Session, inversion_id: int):
 def update_inversion(db: Session, inversion_id: int, inversion: schemas.InversionUpdate):
     db_inversion = get_inversion(db, inversion_id)
     if db_inversion:
-        update_data = inversion.dict(exclude_unset=True)
+        update_data = inversion.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(db_inversion, key, value)
         db.commit()
@@ -193,7 +193,7 @@ def delete_inversion(db: Session, inversion_id: int):
 
 # ========== PROYECCIONES ==========
 def create_proyeccion(db: Session, proyeccion: schemas.ProyeccionPagoCreate):
-    db_proyeccion = models.ProyeccionPago(**proyeccion.dict())
+    db_proyeccion = models.ProyeccionPago(**proyeccion.model_dump())
     db.add(db_proyeccion)
     db.commit()
     db.refresh(db_proyeccion)
@@ -211,6 +211,7 @@ def delete_proyeccion(db: Session, proyeccion_id: int):
         db.commit()
         return True
     return False
+
 
 
 
