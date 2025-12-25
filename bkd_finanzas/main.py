@@ -954,6 +954,179 @@ def get_proyecciones_tarjetas(meses: int = Query(6, description="Número de mese
     return resultado
 
 
+@app.get("/api/proyecciones/prestamos")
+def get_proyecciones_prestamos(meses: int = Query(6, description="Número de meses a proyectar"), db: Session = Depends(get_db)):
+    """Genera proyecciones de pagos de préstamos para los próximos meses"""
+    from datetime import date as date_type, timedelta
+    from calendar import monthrange
+    
+    prestamos = crud.get_prestamos(db)
+    proyecciones = []
+    hoy = date_type.today()
+    
+    for prestamo in prestamos:
+        if not prestamo.activo or prestamo.monto_pagado >= prestamo.monto_total:
+            continue  # Préstamo pagado o inactivo
+        
+        # Monto pendiente
+        monto_pendiente = prestamo.monto_total - prestamo.monto_pagado
+        
+        # Obtener número de cuota actual basándose en pagos
+        pagos = db.query(models.PagoPrestamo).filter(
+            models.PagoPrestamo.prestamo_id == prestamo.id
+        ).order_by(models.PagoPrestamo.fecha_pago.desc()).all()
+        numero_cuota_actual = len(pagos) + 1
+        
+        # Calcular cuotas mensuales
+        for mes_offset in range(meses):
+            # Calcular fecha de vencimiento para esta cuota
+            if prestamo.fecha_vencimiento and prestamo.fecha_vencimiento > hoy:
+                # Si hay fecha de vencimiento definida, calcular desde ahí
+                meses_desde_inicio = (prestamo.fecha_vencimiento.year - prestamo.fecha_inicio.year) * 12 + (prestamo.fecha_vencimiento.month - prestamo.fecha_inicio.month)
+                numero_cuota_base = meses_desde_inicio + mes_offset
+            else:
+                # Calcular desde la fecha de inicio
+                numero_cuota_base = numero_cuota_actual + mes_offset
+            
+            # Calcular fecha de vencimiento
+            fecha_vencimiento_cuota = prestamo.fecha_inicio
+            for _ in range(numero_cuota_base):
+                if fecha_vencimiento_cuota.month == 12:
+                    fecha_vencimiento_cuota = fecha_vencimiento_cuota.replace(year=fecha_vencimiento_cuota.year + 1, month=1)
+                else:
+                    fecha_vencimiento_cuota = fecha_vencimiento_cuota.replace(month=fecha_vencimiento_cuota.month + 1)
+            
+            # Solo agregar si la fecha de vencimiento es futura
+            if fecha_vencimiento_cuota >= hoy:
+                # Calcular desglose de la cuota usando la misma lógica que el endpoint de desglose
+                if prestamo.cuota_mensual and prestamo.cuota_mensual > 0:
+                    monto_total = prestamo.cuota_mensual
+                else:
+                    # Calcular cuota aproximada basándose en el monto pendiente
+                    # Estimación simple: dividir el monto pendiente por el número de cuotas restantes estimadas
+                    cuotas_restantes_estimadas = max(1, meses - mes_offset)
+                    monto_total = monto_pendiente / cuotas_restantes_estimadas
+                
+                # Calcular intereses
+                try:
+                    tasa_anual = getattr(prestamo, 'tasa_interes', 0.0) or 0.0
+                    tasa_mensual = tasa_anual / 12.0 if tasa_anual > 0 else 0.0
+                except:
+                    tasa_mensual = 0.0
+                
+                intereses = monto_pendiente * (tasa_mensual / 100.0) if tasa_mensual > 0 else 0.0
+                
+                # Calcular impuestos
+                try:
+                    impuesto_iva_pct = getattr(prestamo, 'impuesto_iva', 21.0) or 21.0
+                except:
+                    impuesto_iva_pct = 21.0
+                
+                iva_intereses = intereses * (impuesto_iva_pct / 100.0) if intereses > 0 else 0.0
+                
+                try:
+                    impuesto_ganancias_pct = getattr(prestamo, 'impuesto_ganancias', 0.0) or 0.0
+                except:
+                    impuesto_ganancias_pct = 0.0
+                
+                impuesto_ganancias = intereses * (impuesto_ganancias_pct / 100.0) if intereses > 0 and impuesto_ganancias_pct > 0 else 0.0
+                
+                # Gastos administrativos y seguro
+                try:
+                    gastos_admin = getattr(prestamo, 'gastos_administrativos', 500.0) or 500.0
+                except:
+                    gastos_admin = 500.0
+                
+                try:
+                    seguro = getattr(prestamo, 'seguro', 0.0) or 0.0
+                except:
+                    seguro = 0.0
+                
+                # IVA sobre gastos administrativos y seguro
+                iva_gastos_admin = gastos_admin * (impuesto_iva_pct / 100.0) if gastos_admin > 0 else 0.0
+                iva_seguro = seguro * (impuesto_iva_pct / 100.0) if seguro > 0 else 0.0
+                
+                # Impuesto a los sellos
+                try:
+                    impuesto_sellos_pct = getattr(prestamo, 'impuesto_sellos', 0.0) or 0.0
+                except:
+                    impuesto_sellos_pct = 0.0
+                
+                impuesto_sellos = monto_total * (impuesto_sellos_pct / 100.0) if impuesto_sellos_pct > 0 else 0.0
+                
+                # Capital
+                total_cargos = intereses + iva_intereses + impuesto_ganancias + gastos_admin + iva_gastos_admin + seguro + iva_seguro + impuesto_sellos
+                capital = monto_total - total_cargos
+                if capital < 0:
+                    capital = 0
+                
+                otros_impuestos = impuesto_sellos
+                
+                desglose_info = {
+                    'monto_total': monto_total,
+                    'capital': capital,
+                    'intereses': intereses,
+                    'iva_intereses': iva_intereses,
+                    'impuesto_ganancias': impuesto_ganancias,
+                    'gastos_administrativos': gastos_admin,
+                    'seguro': seguro,
+                    'iva_gastos_admin': iva_gastos_admin,
+                    'iva_seguro': iva_seguro,
+                    'otros_impuestos': otros_impuestos,
+                    'total_impuestos': iva_intereses + impuesto_ganancias + iva_gastos_admin + iva_seguro + otros_impuestos,
+                    'total_cargos': total_cargos
+                }
+                
+                proyecciones.append({
+                    'prestamo_id': prestamo.id,
+                    'prestamo_nombre': prestamo.nombre,
+                    'prestamista': prestamo.prestamista,
+                    'fecha_vencimiento': fecha_vencimiento_cuota.isoformat(),
+                    'numero_cuota': numero_cuota_base,
+                    'monto_pendiente': monto_pendiente,
+                    'moneda': prestamo.moneda.value,
+                    'mes': fecha_vencimiento_cuota.strftime('%Y-%m'),
+                    'desglose': desglose_info,
+                    'porcentajes': {
+                        'tasa_interes_anual': tasa_anual,
+                        'tasa_interes_mensual': tasa_mensual,
+                        'impuesto_iva': impuesto_iva_pct,
+                        'impuesto_ganancias': impuesto_ganancias_pct
+                    }
+                })
+                
+                # Actualizar monto pendiente para la siguiente cuota (reducir por el capital)
+                monto_pendiente -= capital
+                if monto_pendiente < 0:
+                    monto_pendiente = 0
+    
+    # Agrupar por mes
+    proyecciones_por_mes: Dict[str, List] = {}
+    for proy in proyecciones:
+        mes = proy['mes']
+        if mes not in proyecciones_por_mes:
+            proyecciones_por_mes[mes] = []
+        proyecciones_por_mes[mes].append(proy)
+    
+    # Calcular totales por mes
+    resultado = []
+    for mes in sorted(proyecciones_por_mes.keys()):
+        proys_mes = proyecciones_por_mes[mes]
+        total_ars = sum(p['desglose']['monto_total'] for p in proys_mes if p['moneda'] == 'ARS')
+        total_usd = sum(p['desglose']['monto_total'] for p in proys_mes if p['moneda'] == 'USD')
+        
+        resultado.append({
+            'mes': mes,
+            'fecha_vencimiento': proys_mes[0]['fecha_vencimiento'],
+            'cantidad_cuotas': len(proys_mes),
+            'total_ars': total_ars,
+            'total_usd': total_usd,
+            'detalle': proys_mes
+        })
+    
+    return resultado
+
+
 @app.get("/api/proyecciones", response_model=List[schemas.ProyeccionPago])
 def read_proyecciones(db: Session = Depends(get_db)):
     proyecciones = crud.get_proyecciones(db)
