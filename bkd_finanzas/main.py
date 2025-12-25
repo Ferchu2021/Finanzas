@@ -20,7 +20,7 @@ app = FastAPI(title="API Finanzas Personales")
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Vite y otros puertos comunes
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],  # Vite y otros puertos comunes
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,10 +109,29 @@ def delete_gasto(gasto_id: int, db: Session = Depends(get_db)):
 
 
 # ========== TARJETAS DE CRÉDITO ==========
-@app.get("/api/tarjetas", response_model=List[schemas.TarjetaCredito])
+@app.get("/api/tarjetas")
 def read_tarjetas(db: Session = Depends(get_db)):
-    tarjetas = crud.get_tarjetas(db)
-    return tarjetas
+    try:
+        tarjetas = crud.get_tarjetas(db)
+        # Serializar manualmente para evitar problemas con campos que no existen en la BD
+        resultado = []
+        for tarjeta in tarjetas:
+            resultado.append({
+                "id": tarjeta.id,
+                "nombre": tarjeta.nombre,
+                "banco": tarjeta.banco,
+                "limite": tarjeta.limite,
+                "moneda": tarjeta.moneda.value if hasattr(tarjeta.moneda, 'value') else str(tarjeta.moneda),
+                "fecha_cierre": tarjeta.fecha_cierre,
+                "fecha_vencimiento": tarjeta.fecha_vencimiento,
+                "saldo_actual": tarjeta.saldo_actual,
+                "created_at": tarjeta.created_at.isoformat() if hasattr(tarjeta.created_at, 'isoformat') else str(tarjeta.created_at)
+            })
+        return resultado
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error al obtener tarjetas: {str(e)}")
 
 
 @app.get("/api/tarjetas/{tarjeta_id}", response_model=schemas.TarjetaCredito)
@@ -121,6 +140,228 @@ def read_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
     if db_tarjeta is None:
         raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
     return db_tarjeta
+
+
+@app.get("/api/tarjetas/{tarjeta_id}/desglose-cuota")
+def get_desglose_cuota_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
+    """Calcula el desglose de la próxima cuota de una tarjeta"""
+    from datetime import date as date_type, timedelta
+    from calendar import monthrange
+    
+    tarjeta = crud.get_tarjeta(db, tarjeta_id=tarjeta_id)
+    if tarjeta is None:
+        raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
+    
+    if tarjeta.saldo_actual <= 0:
+        return {
+            "mensaje": "La tarjeta está pagada, no hay cuota a calcular",
+            "desglose": None
+        }
+    
+    # Calcular próxima fecha de vencimiento
+    hoy = date_type.today()
+    mes_actual = hoy.replace(day=1)
+    
+    ultimo_dia_mes = monthrange(hoy.year, hoy.month)[1]
+    dia_cierre = min(tarjeta.fecha_cierre, ultimo_dia_mes)
+    fecha_cierre_actual = hoy.replace(day=dia_cierre)
+    
+    if hoy.day > tarjeta.fecha_cierre:
+        if hoy.month == 12:
+            fecha_cierre_proxima = date_type(hoy.year + 1, 1, min(tarjeta.fecha_cierre, 31))
+        else:
+            ultimo_dia_sig = monthrange(hoy.year, hoy.month + 1)[1]
+            fecha_cierre_proxima = date_type(hoy.year, hoy.month + 1, min(tarjeta.fecha_cierre, ultimo_dia_sig))
+    else:
+        fecha_cierre_proxima = fecha_cierre_actual
+    
+    dias_hasta_vencimiento = tarjeta.fecha_vencimiento - tarjeta.fecha_cierre
+    if dias_hasta_vencimiento < 0:
+        if fecha_cierre_proxima.month == 12:
+            siguiente_mes = fecha_cierre_proxima.replace(year=fecha_cierre_proxima.year + 1, month=1, day=1)
+        else:
+            siguiente_mes = fecha_cierre_proxima.replace(month=fecha_cierre_proxima.month + 1, day=1)
+        ultimo_dia_sig = monthrange(siguiente_mes.year, siguiente_mes.month)[1]
+        dia_vencimiento = min(tarjeta.fecha_vencimiento, ultimo_dia_sig)
+        fecha_vencimiento_proxima = siguiente_mes.replace(day=dia_vencimiento)
+    else:
+        fecha_vencimiento_proxima = fecha_cierre_proxima + timedelta(days=dias_hasta_vencimiento)
+        if fecha_vencimiento_proxima.month != fecha_cierre_proxima.month:
+            ultimo_dia_sig = monthrange(fecha_vencimiento_proxima.year, fecha_vencimiento_proxima.month)[1]
+            dia_vencimiento = min(tarjeta.fecha_vencimiento, ultimo_dia_sig)
+            fecha_vencimiento_proxima = fecha_vencimiento_proxima.replace(day=dia_vencimiento)
+    
+    # Calcular desglose
+    monto_total = tarjeta.saldo_actual
+    
+    # Calcular intereses (usar tasa mensual si está configurada, sino calcular desde anual)
+    try:
+        tasa_mensual = getattr(tarjeta, 'tasa_interes_mensual', 0.0) or 0.0
+        if tasa_mensual == 0:
+            tasa_anual = getattr(tarjeta, 'tasa_interes_anual', 0.0) or 0.0
+            if tasa_anual > 0:
+                tasa_mensual = tasa_anual / 12.0
+    except:
+        tasa_mensual = 0.0
+    
+    intereses = monto_total * (tasa_mensual / 100.0) if tasa_mensual > 0 else 0.0
+    
+    # Calcular impuestos sobre intereses
+    try:
+        impuesto_iva_pct = getattr(tarjeta, 'impuesto_iva', 21.0) or 21.0
+    except:
+        impuesto_iva_pct = 21.0
+    
+    iva_intereses = intereses * (impuesto_iva_pct / 100.0) if intereses > 0 else 0.0
+    
+    try:
+        impuesto_ganancias_pct = getattr(tarjeta, 'impuesto_ganancias', 0.0) or 0.0
+    except:
+        impuesto_ganancias_pct = 0.0
+    
+    impuesto_ganancias = intereses * (impuesto_ganancias_pct / 100.0) if intereses > 0 and impuesto_ganancias_pct > 0 else 0.0
+    
+    # Gastos administrativos (siempre se cobran, incluso si no hay intereses)
+    try:
+        gastos_admin = getattr(tarjeta, 'gastos_administrativos', 1000.0) or 1000.0
+    except:
+        gastos_admin = 1000.0
+    
+    # IVA sobre gastos administrativos (los bancos cobran IVA sobre los gastos administrativos)
+    iva_gastos_admin = gastos_admin * (impuesto_iva_pct / 100.0) if gastos_admin > 0 else 0.0
+    
+    # Impuesto a los sellos (si aplica)
+    try:
+        impuesto_sellos_pct = getattr(tarjeta, 'impuesto_sellos', 0.0) or 0.0
+    except:
+        impuesto_sellos_pct = 0.0
+    
+    impuesto_sellos = monto_total * (impuesto_sellos_pct / 100.0) if impuesto_sellos_pct > 0 else 0.0
+    
+    # Otros impuestos y cargos bancarios típicos
+    cargo_mantenimiento = 0.0  # Se puede configurar por tarjeta
+    
+    # Capital (monto total menos todos los cargos)
+    total_cargos = intereses + iva_intereses + impuesto_ganancias + gastos_admin + iva_gastos_admin + impuesto_sellos + cargo_mantenimiento
+    capital = monto_total - total_cargos
+    if capital < 0:
+        capital = 0
+    
+    otros_impuestos = impuesto_sellos + cargo_mantenimiento
+    
+    return {
+        "tarjeta_id": tarjeta.id,
+        "tarjeta_nombre": tarjeta.nombre,
+        "fecha_vencimiento": fecha_vencimiento_proxima.isoformat(),
+        "moneda": tarjeta.moneda.value,
+        "desglose": {
+            "monto_total": monto_total,
+            "capital": capital,
+            "intereses": intereses,
+            "iva_intereses": iva_intereses,
+            "impuesto_ganancias": impuesto_ganancias,
+            "gastos_administrativos": gastos_admin,
+            "otros_impuestos": otros_impuestos,
+            "iva_gastos_admin": iva_gastos_admin,
+            "total_impuestos": iva_intereses + impuesto_ganancias + iva_gastos_admin + otros_impuestos,
+            "total_cargos": intereses + iva_intereses + impuesto_ganancias + gastos_admin + iva_gastos_admin + otros_impuestos
+        },
+        "porcentajes": {
+            "tasa_interes_mensual": tasa_mensual,
+            "tasa_interes_anual": getattr(tarjeta, 'tasa_interes_anual', 0.0) or 0.0,
+            "impuesto_iva": impuesto_iva_pct,
+            "impuesto_ganancias": impuesto_ganancias_pct
+        }
+    }
+
+
+@app.get("/api/tarjetas/{tarjeta_id}/detalles")
+def get_detalles_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
+    """Obtiene detalles completos de una tarjeta incluyendo pagos y estado"""
+    from datetime import date as date_type, timedelta
+    from calendar import monthrange
+    
+    tarjeta = crud.get_tarjeta(db, tarjeta_id=tarjeta_id)
+    if tarjeta is None:
+        raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
+    
+    # Obtener pagos realizados
+    pagos = db.query(models.PagoTarjeta).filter(
+        models.PagoTarjeta.tarjeta_id == tarjeta_id
+    ).order_by(models.PagoTarjeta.fecha_pago.desc()).limit(10).all()
+    
+    # Calcular próxima fecha de cierre y vencimiento
+    hoy = date_type.today()
+    mes_actual = hoy.replace(day=1)
+    
+    # Calcular fecha de cierre del mes actual
+    ultimo_dia_mes = monthrange(hoy.year, hoy.month)[1]
+    dia_cierre = min(tarjeta.fecha_cierre, ultimo_dia_mes)
+    fecha_cierre_actual = hoy.replace(day=dia_cierre)
+    
+    # Si ya pasó el cierre de este mes, calcular el próximo
+    if hoy.day > tarjeta.fecha_cierre:
+        if hoy.month == 12:
+            fecha_cierre_proxima = date_type(hoy.year + 1, 1, min(tarjeta.fecha_cierre, 31))
+        else:
+            ultimo_dia_sig = monthrange(hoy.year, hoy.month + 1)[1]
+            fecha_cierre_proxima = date_type(hoy.year, hoy.month + 1, min(tarjeta.fecha_cierre, ultimo_dia_sig))
+    else:
+        fecha_cierre_proxima = fecha_cierre_actual
+    
+    # Calcular fecha de vencimiento
+    dias_hasta_vencimiento = tarjeta.fecha_vencimiento - tarjeta.fecha_cierre
+    if dias_hasta_vencimiento < 0:
+        # Vencimiento es el mes siguiente
+        if fecha_cierre_proxima.month == 12:
+            siguiente_mes = fecha_cierre_proxima.replace(year=fecha_cierre_proxima.year + 1, month=1, day=1)
+        else:
+            siguiente_mes = fecha_cierre_proxima.replace(month=fecha_cierre_proxima.month + 1, day=1)
+        ultimo_dia_sig = monthrange(siguiente_mes.year, siguiente_mes.month)[1]
+        dia_vencimiento = min(tarjeta.fecha_vencimiento, ultimo_dia_sig)
+        fecha_vencimiento_proxima = siguiente_mes.replace(day=dia_vencimiento)
+    else:
+        fecha_vencimiento_proxima = fecha_cierre_proxima + timedelta(days=dias_hasta_vencimiento)
+        if fecha_vencimiento_proxima.month != fecha_cierre_proxima.month:
+            ultimo_dia_sig = monthrange(fecha_vencimiento_proxima.year, fecha_vencimiento_proxima.month)[1]
+            dia_vencimiento = min(tarjeta.fecha_vencimiento, ultimo_dia_sig)
+            fecha_vencimiento_proxima = fecha_vencimiento_proxima.replace(day=dia_vencimiento)
+    
+    # Determinar estado
+    esta_pagada = tarjeta.saldo_actual <= 0
+    disponible = tarjeta.limite - tarjeta.saldo_actual
+    porcentaje_uso = (tarjeta.saldo_actual / tarjeta.limite * 100) if tarjeta.limite > 0 else 0
+    
+    return {
+        "tarjeta": {
+            "id": tarjeta.id,
+            "nombre": tarjeta.nombre,
+            "banco": tarjeta.banco,
+            "limite": tarjeta.limite,
+            "saldo_actual": tarjeta.saldo_actual,
+            "disponible": disponible,
+            "moneda": tarjeta.moneda.value,
+            "fecha_cierre": tarjeta.fecha_cierre,
+            "fecha_vencimiento": tarjeta.fecha_vencimiento,
+            "porcentaje_uso": porcentaje_uso,
+            "esta_pagada": esta_pagada
+        },
+        "proximas_fechas": {
+            "fecha_cierre": fecha_cierre_proxima.isoformat(),
+            "fecha_vencimiento": fecha_vencimiento_proxima.isoformat(),
+            "dias_hasta_vencimiento": (fecha_vencimiento_proxima - hoy).days
+        },
+        "pagos": [
+            {
+                "id": pago.id,
+                "fecha_pago": pago.fecha_pago.isoformat(),
+                "monto": pago.monto,
+                "descripcion": pago.descripcion
+            }
+            for pago in pagos
+        ],
+        "total_pagado": sum(pago.monto for pago in pagos)
+    }
 
 
 @app.post("/api/tarjetas", response_model=schemas.TarjetaCredito)
@@ -157,6 +398,138 @@ def read_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     if db_prestamo is None:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     return db_prestamo
+
+
+@app.get("/api/prestamos/{prestamo_id}/desglose-cuota")
+def get_desglose_cuota_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+    """Calcula el desglose de la próxima cuota de un préstamo"""
+    from datetime import date as date_type, timedelta
+    
+    prestamo = crud.get_prestamo(db, prestamo_id=prestamo_id)
+    if prestamo is None:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    if not prestamo.activo or prestamo.monto_pagado >= prestamo.monto_total:
+        return {
+            "mensaje": "El préstamo está pagado o inactivo",
+            "desglose": None
+        }
+    
+    # Calcular próxima fecha de vencimiento (asumiendo cuota mensual)
+    hoy = date_type.today()
+    if prestamo.fecha_vencimiento and prestamo.fecha_vencimiento > hoy:
+        fecha_vencimiento_proxima = prestamo.fecha_vencimiento
+    else:
+        # Calcular basándose en la fecha de inicio
+        meses_transcurridos = (hoy.year - prestamo.fecha_inicio.year) * 12 + (hoy.month - prestamo.fecha_inicio.month)
+        fecha_vencimiento_proxima = prestamo.fecha_inicio
+        for _ in range(meses_transcurridos + 1):
+            if fecha_vencimiento_proxima.month == 12:
+                fecha_vencimiento_proxima = fecha_vencimiento_proxima.replace(year=fecha_vencimiento_proxima.year + 1, month=1)
+            else:
+                fecha_vencimiento_proxima = fecha_vencimiento_proxima.replace(month=fecha_vencimiento_proxima.month + 1)
+    
+    # Monto pendiente
+    monto_pendiente = prestamo.monto_total - prestamo.monto_pagado
+    
+    # Usar cuota mensual si está definida, sino calcular
+    if prestamo.cuota_mensual and prestamo.cuota_mensual > 0:
+        monto_total = prestamo.cuota_mensual
+    else:
+        # Calcular cuota aproximada (simplificado)
+        monto_total = monto_pendiente * 0.1  # 10% aproximado, se puede mejorar
+    
+    # Calcular intereses
+    try:
+        tasa_anual = getattr(prestamo, 'tasa_interes', 0.0) or 0.0
+        tasa_mensual = tasa_anual / 12.0 if tasa_anual > 0 else 0.0
+    except:
+        tasa_mensual = 0.0
+    
+    intereses = monto_pendiente * (tasa_mensual / 100.0) if tasa_mensual > 0 else 0.0
+    
+    # Calcular impuestos sobre intereses
+    try:
+        impuesto_iva_pct = getattr(prestamo, 'impuesto_iva', 21.0) or 21.0
+    except:
+        impuesto_iva_pct = 21.0
+    
+    iva_intereses = intereses * (impuesto_iva_pct / 100.0) if intereses > 0 else 0.0
+    
+    try:
+        impuesto_ganancias_pct = getattr(prestamo, 'impuesto_ganancias', 0.0) or 0.0
+    except:
+        impuesto_ganancias_pct = 0.0
+    
+    impuesto_ganancias = intereses * (impuesto_ganancias_pct / 100.0) if intereses > 0 and impuesto_ganancias_pct > 0 else 0.0
+    
+    # Gastos administrativos y seguro
+    try:
+        gastos_admin = getattr(prestamo, 'gastos_administrativos', 500.0) or 500.0
+    except:
+        gastos_admin = 500.0
+    
+    try:
+        seguro = getattr(prestamo, 'seguro', 0.0) or 0.0
+    except:
+        seguro = 0.0
+    
+    # IVA sobre gastos administrativos y seguro
+    iva_gastos_admin = gastos_admin * (impuesto_iva_pct / 100.0) if gastos_admin > 0 else 0.0
+    iva_seguro = seguro * (impuesto_iva_pct / 100.0) if seguro > 0 else 0.0
+    
+    # Impuesto a los sellos (si aplica)
+    try:
+        impuesto_sellos_pct = getattr(prestamo, 'impuesto_sellos', 0.0) or 0.0
+    except:
+        impuesto_sellos_pct = 0.0
+    
+    impuesto_sellos = monto_total * (impuesto_sellos_pct / 100.0) if impuesto_sellos_pct > 0 else 0.0
+    
+    # Capital (monto total menos todos los cargos)
+    total_cargos = intereses + iva_intereses + impuesto_ganancias + gastos_admin + iva_gastos_admin + seguro + iva_seguro + impuesto_sellos
+    capital = monto_total - total_cargos
+    if capital < 0:
+        capital = 0
+    
+    otros_impuestos = impuesto_sellos
+    
+    # Calcular número de cuota
+    if prestamo.fecha_vencimiento:
+        meses_totales = (prestamo.fecha_vencimiento.year - prestamo.fecha_inicio.year) * 12 + (prestamo.fecha_vencimiento.month - prestamo.fecha_inicio.month)
+        meses_pagados = (hoy.year - prestamo.fecha_inicio.year) * 12 + (hoy.month - prestamo.fecha_inicio.month)
+        numero_cuota = meses_pagados + 1
+    else:
+        numero_cuota = 1
+    
+    return {
+        "prestamo_id": prestamo.id,
+        "prestamo_nombre": prestamo.nombre,
+        "fecha_vencimiento": fecha_vencimiento_proxima.isoformat(),
+        "numero_cuota": numero_cuota,
+        "moneda": prestamo.moneda.value,
+        "monto_pendiente": monto_pendiente,
+        "desglose": {
+            "monto_total": monto_total,
+            "capital": capital,
+            "intereses": intereses,
+            "iva_intereses": iva_intereses,
+            "impuesto_ganancias": impuesto_ganancias,
+            "gastos_administrativos": gastos_admin,
+            "seguro": seguro,
+            "otros_impuestos": otros_impuestos,
+            "iva_gastos_admin": iva_gastos_admin,
+            "iva_seguro": iva_seguro,
+            "total_impuestos": iva_intereses + impuesto_ganancias + iva_gastos_admin + iva_seguro + otros_impuestos,
+            "total_cargos": intereses + iva_intereses + impuesto_ganancias + gastos_admin + iva_gastos_admin + seguro + iva_seguro + otros_impuestos
+        },
+        "porcentajes": {
+            "tasa_interes_anual": tasa_anual,
+            "tasa_interes_mensual": tasa_mensual,
+            "impuesto_iva": impuesto_iva_pct,
+            "impuesto_ganancias": impuesto_ganancias_pct
+        }
+    }
 
 
 @app.post("/api/prestamos", response_model=schemas.Prestamo)

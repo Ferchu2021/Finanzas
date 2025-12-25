@@ -100,7 +100,13 @@ const Proyecciones: React.FC = () => {
 
       {proyecciones.length === 0 ? (
         <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#fff', borderRadius: '8px', marginTop: '1rem' }}>
-          <p>No hay proyecciones de pagos de tarjetas para los próximos meses</p>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
+          <h3 style={{ margin: '0 0 0.5rem 0', color: '#27ae60' }}>¡Excelente!</h3>
+          <p style={{ margin: 0, color: '#7f8c8d' }}>
+            No hay proyecciones de pagos de tarjetas para los próximos {meses} meses.
+            <br />
+            Esto significa que todas tus tarjetas están pagadas o no tienen saldo pendiente.
+          </p>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '1.5rem' }}>
@@ -143,18 +149,33 @@ const Proyecciones: React.FC = () => {
               <div style={{ display: 'grid', gap: '1rem' }}>
                 {proyeccion.detalle.map((detalle, detalleIndex) => {
                   const diasRestantes = Math.ceil((new Date(detalle.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                  const estaPagada = detalle.monto_estimado <= 0
                   
                   return (
                     <div
                       key={detalleIndex}
                       style={{
                         padding: '1.25rem',
-                        backgroundColor: '#f8f9fa',
+                        backgroundColor: estaPagada ? '#d4edda' : '#f8f9fa',
                         borderRadius: '8px',
-                        borderLeft: '4px solid #3498db',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                        borderLeft: `4px solid ${estaPagada ? '#27ae60' : '#3498db'}`,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        opacity: estaPagada ? 0.7 : 1
                       }}
                     >
+                      {estaPagada && (
+                        <div style={{
+                          marginBottom: '1rem',
+                          padding: '0.75rem',
+                          backgroundColor: '#c3e6cb',
+                          borderRadius: '4px',
+                          border: '1px solid #b1dfbb'
+                        }}>
+                          <p style={{ margin: 0, fontSize: '0.9rem', color: '#155724', fontWeight: '500' }}>
+                            ✓ Esta tarjeta está pagada (saldo: {formatearMonto(0, detalle.moneda)})
+                          </p>
+                        </div>
+                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                         <div style={{ flex: 1 }}>
                           <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#2c3e50', fontWeight: '600' }}>

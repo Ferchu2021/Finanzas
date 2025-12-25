@@ -60,6 +60,13 @@ class TarjetaCredito(Base):
     fecha_cierre = Column(Integer, nullable=False)  # Día del mes
     fecha_vencimiento = Column(Integer, nullable=False)  # Día del mes
     saldo_actual = Column(Float, default=0.0)
+    # Campos nuevos - descomentar después de migrar la BD
+    # tasa_interes_anual = Column(Float, default=90.0)  # Tasa de interés anual (%) - Típico en Argentina: 60-120%
+    # tasa_interes_mensual = Column(Float, default=7.5)  # Tasa de interés mensual (%) - Típico: 5-10%
+    # impuesto_iva = Column(Float, default=21.0)  # IVA (%) - Obligatorio en Argentina
+    # impuesto_ganancias = Column(Float, default=0.0)  # Impuesto a las ganancias (%) - Puede aplicarse
+    # gastos_administrativos = Column(Float, default=1000.0)  # Gastos administrativos mensuales (ARS) - Típico: $500-2000
+    # impuesto_sellos = Column(Float, default=0.0)  # Impuesto a los sellos provincial (%) - Variable por provincia
     created_at = Column(Date, default=date.today)
 
 
@@ -74,6 +81,24 @@ class PagoTarjeta(Base):
     created_at = Column(Date, default=date.today)
 
 
+class DesgloseCuotaTarjeta(Base):
+    __tablename__ = "desglose_cuota_tarjeta"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tarjeta_id = Column(Integer, nullable=False)
+    fecha_vencimiento = Column(Date, nullable=False)
+    monto_total = Column(Float, nullable=False)
+    capital = Column(Float, default=0.0)  # Monto del capital
+    intereses = Column(Float, default=0.0)  # Intereses
+    iva_intereses = Column(Float, default=0.0)  # IVA sobre intereses
+    impuesto_ganancias = Column(Float, default=0.0)  # Impuesto a las ganancias
+    gastos_administrativos = Column(Float, default=0.0)  # Gastos administrativos
+    otros_impuestos = Column(Float, default=0.0)  # Otros impuestos
+    moneda = Column(Enum(TipoMoneda), nullable=False)
+    descripcion = Column(String(500))
+    created_at = Column(Date, default=date.today)
+
+
 class Prestamo(Base):
     __tablename__ = "prestamos"
 
@@ -83,7 +108,13 @@ class Prestamo(Base):
     monto_total = Column(Float, nullable=False)
     monto_pagado = Column(Float, default=0.0)
     moneda = Column(Enum(TipoMoneda), nullable=False)
-    tasa_interes = Column(Float, default=0.0)
+    tasa_interes = Column(Float, default=0.0)  # Tasa de interés anual (%)
+    # Campos nuevos - descomentar después de migrar la BD
+    # impuesto_iva = Column(Float, default=21.0)  # IVA (%) - Obligatorio en Argentina
+    # impuesto_ganancias = Column(Float, default=0.0)  # Impuesto a las ganancias (%) - Puede aplicarse
+    # gastos_administrativos = Column(Float, default=500.0)  # Gastos administrativos mensuales (ARS) - Variable
+    # seguro = Column(Float, default=0.0)  # Seguro mensual (ARS) - Si aplica
+    # impuesto_sellos = Column(Float, default=0.0)  # Impuesto a los sellos provincial (%) - Variable por provincia
     fecha_inicio = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date)
     cuota_mensual = Column(Float)
@@ -99,6 +130,26 @@ class PagoPrestamo(Base):
     prestamo_id = Column(Integer, nullable=False)
     fecha_pago = Column(Date, nullable=False)
     monto = Column(Float, nullable=False)
+    descripcion = Column(String(500))
+    created_at = Column(Date, default=date.today)
+
+
+class DesgloseCuotaPrestamo(Base):
+    __tablename__ = "desglose_cuota_prestamo"
+
+    id = Column(Integer, primary_key=True, index=True)
+    prestamo_id = Column(Integer, nullable=False)
+    fecha_vencimiento = Column(Date, nullable=False)
+    numero_cuota = Column(Integer, nullable=False)
+    monto_total = Column(Float, nullable=False)
+    capital = Column(Float, default=0.0)  # Monto del capital
+    intereses = Column(Float, default=0.0)  # Intereses
+    iva_intereses = Column(Float, default=0.0)  # IVA sobre intereses
+    impuesto_ganancias = Column(Float, default=0.0)  # Impuesto a las ganancias
+    gastos_administrativos = Column(Float, default=0.0)  # Gastos administrativos
+    seguro = Column(Float, default=0.0)  # Seguro
+    otros_impuestos = Column(Float, default=0.0)  # Otros impuestos
+    moneda = Column(Enum(TipoMoneda), nullable=False)
     descripcion = Column(String(500))
     created_at = Column(Date, default=date.today)
 

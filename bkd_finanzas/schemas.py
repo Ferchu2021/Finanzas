@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from datetime import date
 from typing import Optional
 from models import TipoIngreso, TipoGasto, TipoMoneda
@@ -71,7 +71,12 @@ class TarjetaCreditoBase(BaseModel):
 
 
 class TarjetaCreditoCreate(TarjetaCreditoBase):
-    pass
+    tasa_interes_anual: Optional[float] = 90.0
+    tasa_interes_mensual: Optional[float] = 7.5
+    impuesto_iva: Optional[float] = 21.0
+    impuesto_ganancias: Optional[float] = 0.0
+    gastos_administrativos: Optional[float] = 1000.0
+    impuesto_sellos: Optional[float] = 0.0
 
 
 class TarjetaCreditoUpdate(BaseModel):
@@ -82,6 +87,11 @@ class TarjetaCreditoUpdate(BaseModel):
     fecha_cierre: Optional[int] = None
     fecha_vencimiento: Optional[int] = None
     saldo_actual: Optional[float] = None
+    tasa_interes_anual: Optional[float] = None
+    tasa_interes_mensual: Optional[float] = None
+    impuesto_iva: Optional[float] = None
+    impuesto_ganancias: Optional[float] = None
+    gastos_administrativos: Optional[float] = None
 
 
 class TarjetaCredito(TarjetaCreditoBase):
@@ -89,6 +99,20 @@ class TarjetaCredito(TarjetaCreditoBase):
     saldo_actual: float
     created_at: date
     model_config = ConfigDict(from_attributes=True)
+
+
+class DesgloseCuotaTarjeta(BaseModel):
+    tarjeta_id: int
+    fecha_vencimiento: date
+    monto_total: float
+    capital: float
+    intereses: float
+    iva_intereses: float
+    impuesto_ganancias: float
+    gastos_administrativos: float
+    otros_impuestos: float
+    moneda: TipoMoneda
+    descripcion: Optional[str] = None
 
 
 class PagoTarjetaCreate(BaseModel):
@@ -112,7 +136,11 @@ class PrestamoBase(BaseModel):
 
 
 class PrestamoCreate(PrestamoBase):
-    pass
+    impuesto_iva: Optional[float] = 21.0
+    impuesto_ganancias: Optional[float] = 0.0
+    gastos_administrativos: Optional[float] = 500.0
+    seguro: Optional[float] = 0.0
+    impuesto_sellos: Optional[float] = 0.0
 
 
 class PrestamoUpdate(BaseModel):
@@ -121,6 +149,10 @@ class PrestamoUpdate(BaseModel):
     monto_total: Optional[float] = None
     moneda: Optional[TipoMoneda] = None
     tasa_interes: Optional[float] = None
+    impuesto_iva: Optional[float] = None
+    impuesto_ganancias: Optional[float] = None
+    gastos_administrativos: Optional[float] = None
+    seguro: Optional[float] = None
     fecha_inicio: Optional[date] = None
     fecha_vencimiento: Optional[date] = None
     cuota_mensual: Optional[float] = None
@@ -135,6 +167,22 @@ class Prestamo(PrestamoBase):
     activo: bool
     created_at: date
     model_config = ConfigDict(from_attributes=True)
+
+
+class DesgloseCuotaPrestamo(BaseModel):
+    prestamo_id: int
+    fecha_vencimiento: date
+    numero_cuota: int
+    monto_total: float
+    capital: float
+    intereses: float
+    iva_intereses: float
+    impuesto_ganancias: float
+    gastos_administrativos: float
+    seguro: float
+    otros_impuestos: float
+    moneda: TipoMoneda
+    descripcion: Optional[str] = None
 
 
 class PagoPrestamoCreate(BaseModel):
