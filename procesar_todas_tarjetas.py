@@ -149,3 +149,5 @@ for t in sorted(tarjetas, key=lambda x: x.get('banco', '') + x['nombre']):
 print(f"\nTOTAL A PAGAR: ${total_pagos:,.2f}")
 
 
+
+
