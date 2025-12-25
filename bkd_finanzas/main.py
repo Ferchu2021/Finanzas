@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import List, Optional, Dict
 from datetime import date
 
@@ -116,6 +117,25 @@ def read_tarjetas(db: Session = Depends(get_db)):
         # Serializar manualmente para evitar problemas con campos que no existen en la BD
         resultado = []
         for tarjeta in tarjetas:
+            # Verificar si tiene pagos parciales
+            pagos = db.query(models.PagoTarjeta).filter(
+                models.PagoTarjeta.tarjeta_id == tarjeta.id
+            ).order_by(models.PagoTarjeta.fecha_pago.desc()).all()
+            
+            tiene_pagos_parciales = False
+            cantidad_pagos_parciales = 0
+            if pagos and tarjeta.saldo_actual > 0:
+                # Si hay saldo pendiente y hay pagos, es probable que haya pagos parciales
+                total_pagado = sum(pago.monto for pago in pagos)
+                saldo_original = tarjeta.saldo_actual + total_pagado
+                
+                # Contar pagos parciales
+                saldo_antes = saldo_original
+                for pago in pagos:
+                    if pago.monto < saldo_antes:
+                        tiene_pagos_parciales = True
+                        cantidad_pagos_parciales += 1
+                    saldo_antes -= pago.monto
             resultado.append({
                 "id": tarjeta.id,
                 "nombre": tarjeta.nombre,
@@ -125,7 +145,9 @@ def read_tarjetas(db: Session = Depends(get_db)):
                 "fecha_cierre": tarjeta.fecha_cierre,
                 "fecha_vencimiento": tarjeta.fecha_vencimiento,
                 "saldo_actual": tarjeta.saldo_actual,
-                "created_at": tarjeta.created_at.isoformat() if hasattr(tarjeta.created_at, 'isoformat') else str(tarjeta.created_at)
+                "created_at": tarjeta.created_at.isoformat() if hasattr(tarjeta.created_at, 'isoformat') else str(tarjeta.created_at),
+                "tiene_pagos_parciales": tiene_pagos_parciales,
+                "cantidad_pagos_parciales": cantidad_pagos_parciales
             })
         return resultado
     except Exception as e:
@@ -249,11 +271,50 @@ def get_desglose_cuota_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
     
     otros_impuestos = impuesto_sellos + cargo_mantenimiento
     
+    # Obtener gastos del período de cierre actual
+    # Calcular período de cierre (desde el cierre anterior hasta el próximo cierre)
+    if fecha_cierre_proxima.month == 1:
+        fecha_cierre_anterior = date_type(fecha_cierre_proxima.year - 1, 12, min(tarjeta.fecha_cierre, 31))
+    else:
+        ultimo_dia_anterior = monthrange(fecha_cierre_proxima.year, fecha_cierre_proxima.month - 1)[1]
+        fecha_cierre_anterior = date_type(fecha_cierre_proxima.year, fecha_cierre_proxima.month - 1, min(tarjeta.fecha_cierre, ultimo_dia_anterior))
+    
+    fecha_inicio_periodo = fecha_cierre_anterior + timedelta(days=1)
+    fecha_fin_periodo = fecha_cierre_proxima
+    
+    # Obtener gastos del período
+    gastos_periodo = db.query(models.Gasto).filter(
+        and_(
+            models.Gasto.fecha >= fecha_inicio_periodo,
+            models.Gasto.fecha <= fecha_fin_periodo,
+            models.Gasto.moneda == tarjeta.moneda
+        )
+    ).order_by(models.Gasto.fecha.desc()).all()
+    
+    total_gastos_periodo = sum(gasto.monto for gasto in gastos_periodo)
+    
+    # Preparar lista de gastos con información detallada
+    gastos_detalle = []
+    for gasto in gastos_periodo:
+        gastos_detalle.append({
+            "id": gasto.id,
+            "fecha": gasto.fecha.isoformat(),
+            "monto": gasto.monto,
+            "descripcion": gasto.descripcion or "Sin descripción",
+            "categoria": gasto.categoria or "Sin categoría",
+            "tipo": gasto.tipo.value if hasattr(gasto.tipo, 'value') else str(gasto.tipo)
+        })
+    
     return {
         "tarjeta_id": tarjeta.id,
         "tarjeta_nombre": tarjeta.nombre,
         "fecha_vencimiento": fecha_vencimiento_proxima.isoformat(),
+        "fecha_cierre": fecha_cierre_proxima.isoformat(),
         "moneda": tarjeta.moneda.value,
+        "periodo_cierre": {
+            "fecha_inicio": fecha_inicio_periodo.isoformat(),
+            "fecha_fin": fecha_fin_periodo.isoformat()
+        },
         "desglose": {
             "monto_total": monto_total,
             "capital": capital,
@@ -266,6 +327,11 @@ def get_desglose_cuota_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
             "total_impuestos": iva_intereses + impuesto_ganancias + iva_gastos_admin + otros_impuestos,
             "total_cargos": intereses + iva_intereses + impuesto_ganancias + gastos_admin + iva_gastos_admin + otros_impuestos
         },
+        "gastos_periodo": {
+            "gastos": gastos_detalle,
+            "total": total_gastos_periodo,
+            "cantidad": len(gastos_periodo)
+        },
         "porcentajes": {
             "tasa_interes_mensual": tasa_mensual,
             "tasa_interes_anual": getattr(tarjeta, 'tasa_interes_anual', 0.0) or 0.0,
@@ -273,6 +339,23 @@ def get_desglose_cuota_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
             "impuesto_ganancias": impuesto_ganancias_pct
         }
     }
+
+
+@app.post("/api/tarjetas/{tarjeta_id}/pagos", response_model=schemas.PagoTarjeta)
+def create_pago_tarjeta(tarjeta_id: int, pago: schemas.PagoTarjetaCreate, db: Session = Depends(get_db)):
+    """Registra un pago de tarjeta y actualiza el saldo"""
+    # Verificar que la tarjeta existe
+    tarjeta = crud.get_tarjeta(db, tarjeta_id=tarjeta_id)
+    if tarjeta is None:
+        raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
+    
+    # Asegurar que el tarjeta_id del pago coincida
+    pago.tarjeta_id = tarjeta_id
+    
+    # Crear el pago (esto actualiza automáticamente el saldo)
+    db_pago = crud.create_pago_tarjeta(db, pago=pago)
+    
+    return db_pago
 
 
 @app.get("/api/tarjetas/{tarjeta_id}/detalles")
@@ -285,10 +368,10 @@ def get_detalles_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
     if tarjeta is None:
         raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
     
-    # Obtener pagos realizados
+    # Obtener TODOS los pagos realizados (sin límite para ver historial completo)
     pagos = db.query(models.PagoTarjeta).filter(
         models.PagoTarjeta.tarjeta_id == tarjeta_id
-    ).order_by(models.PagoTarjeta.fecha_pago.desc()).limit(10).all()
+    ).order_by(models.PagoTarjeta.fecha_pago.desc()).all()
     
     # Calcular próxima fecha de cierre y vencimiento
     hoy = date_type.today()
@@ -332,6 +415,38 @@ def get_detalles_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
     disponible = tarjeta.limite - tarjeta.saldo_actual
     porcentaje_uso = (tarjeta.saldo_actual / tarjeta.limite * 100) if tarjeta.limite > 0 else 0
     
+    # Calcular monto total a pagar (saldo actual) para comparar con pagos
+    monto_total_pendiente = tarjeta.saldo_actual
+    
+    # Calcular total pagado (suma de todos los pagos)
+    total_pagado = sum(pago.monto for pago in pagos) if pagos else 0.0
+    
+    # Para cada pago, determinar si fue parcial comparando con el saldo que había antes del pago
+    # Necesitamos reconstruir el saldo histórico
+    pagos_con_info = []
+    saldo_antes_pago = tarjeta.saldo_actual + total_pagado  # Saldo original antes de cualquier pago
+    
+    for pago in pagos:
+        # El saldo antes de este pago es el saldo actual + todos los pagos hasta este punto
+        # Como los pagos están ordenados descendente, necesitamos calcular hacia atrás
+        saldo_antes = saldo_antes_pago
+        saldo_antes_pago -= pago.monto  # Restar este pago para obtener el saldo antes
+        
+        # Determinar si fue pago parcial (si el monto pagado es menor al saldo que había)
+        es_parcial = pago.monto < saldo_antes
+        porcentaje_pagado = (pago.monto / saldo_antes * 100) if saldo_antes > 0 else 0
+        
+        pagos_con_info.append({
+            "id": pago.id,
+            "fecha_pago": pago.fecha_pago.isoformat(),
+            "monto": pago.monto,
+            "descripcion": pago.descripcion,
+            "es_parcial": es_parcial,
+            "saldo_antes_pago": saldo_antes,
+            "saldo_despues_pago": saldo_antes - pago.monto,
+            "porcentaje_del_saldo": porcentaje_pagado
+        })
+    
     return {
         "tarjeta": {
             "id": tarjeta.id,
@@ -351,16 +466,9 @@ def get_detalles_tarjeta(tarjeta_id: int, db: Session = Depends(get_db)):
             "fecha_vencimiento": fecha_vencimiento_proxima.isoformat(),
             "dias_hasta_vencimiento": (fecha_vencimiento_proxima - hoy).days
         },
-        "pagos": [
-            {
-                "id": pago.id,
-                "fecha_pago": pago.fecha_pago.isoformat(),
-                "monto": pago.monto,
-                "descripcion": pago.descripcion
-            }
-            for pago in pagos
-        ],
-        "total_pagado": sum(pago.monto for pago in pagos)
+        "pagos": pagos_con_info,
+        "total_pagado": total_pagado,
+        "monto_total_pendiente": monto_total_pendiente
     }
 
 
@@ -590,9 +698,64 @@ def delete_inversion(inversion_id: int, db: Session = Depends(get_db)):
 
 
 # ========== PROYECCIONES ==========
+@app.get("/api/tarjetas/{tarjeta_id}/gastos-periodo")
+def get_gastos_periodo_tarjeta(
+    tarjeta_id: int,
+    fecha_inicio: str = Query(..., description="Fecha de inicio del período (YYYY-MM-DD)"),
+    fecha_fin: str = Query(..., description="Fecha de fin del período (YYYY-MM-DD)"),
+    db: Session = Depends(get_db)
+):
+    """Obtiene los gastos de un período específico que corresponden a una tarjeta"""
+    from datetime import date as date_type
+    
+    tarjeta = crud.get_tarjeta(db, tarjeta_id=tarjeta_id)
+    if tarjeta is None:
+        raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
+    
+    try:
+        fecha_inicio_obj = date_type.fromisoformat(fecha_inicio)
+        fecha_fin_obj = date_type.fromisoformat(fecha_fin)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+    
+    # Obtener gastos del período (filtrar por moneda de la tarjeta y fecha)
+    gastos = db.query(models.Gasto).filter(
+        and_(
+            models.Gasto.fecha >= fecha_inicio_obj,
+            models.Gasto.fecha <= fecha_fin_obj,
+            models.Gasto.moneda == tarjeta.moneda
+        )
+    ).order_by(models.Gasto.fecha.desc()).all()
+    
+    total_gastos = sum(gasto.monto for gasto in gastos)
+    
+    return {
+        "tarjeta_id": tarjeta_id,
+        "tarjeta_nombre": tarjeta.nombre,
+        "periodo": {
+            "fecha_inicio": fecha_inicio,
+            "fecha_fin": fecha_fin
+        },
+        "gastos": [
+            {
+                "id": gasto.id,
+                "fecha": gasto.fecha.isoformat(),
+                "monto": gasto.monto,
+                "moneda": gasto.moneda.value,
+                "tipo": gasto.tipo.value,
+                "categoria": gasto.categoria,
+                "descripcion": gasto.descripcion
+            }
+            for gasto in gastos
+        ],
+        "total_gastos": total_gastos,
+        "cantidad_gastos": len(gastos)
+    }
+
+
 @app.get("/api/proyecciones/tarjetas")
 def get_proyecciones_tarjetas(meses: int = Query(6, description="Número de meses a proyectar"), db: Session = Depends(get_db)):
-    """Genera proyecciones de pagos de tarjetas para los próximos meses"""
+    """Genera proyecciones de pagos de tarjetas para los próximos meses con desglose de gastos"""
     from datetime import date as date_type, timedelta
     from calendar import monthrange
     
@@ -650,9 +813,100 @@ def get_proyecciones_tarjetas(meses: int = Query(6, description="Número de mese
             
             # Solo agregar si la fecha de vencimiento es futura
             if fecha_vencimiento >= hoy:
-                # Para simplificar, proyectamos el saldo actual como pago
-                # En una implementación más avanzada se podría calcular cuotas mínimas o porcentajes
-                monto_estimado = tarjeta.saldo_actual
+                # Calcular el período de cierre (desde el cierre anterior hasta este cierre)
+                # Calcular fecha de cierre anterior
+                try:
+                    if fecha_cierre.month == 1:
+                        fecha_cierre_anterior = date_type(fecha_cierre.year - 1, 12, min(tarjeta.fecha_cierre, 31))
+                    else:
+                        ultimo_dia_anterior = monthrange(fecha_cierre.year, fecha_cierre.month - 1)[1]
+                        fecha_cierre_anterior = date_type(fecha_cierre.year, fecha_cierre.month - 1, min(tarjeta.fecha_cierre, ultimo_dia_anterior))
+                    fecha_inicio_periodo = fecha_cierre_anterior + timedelta(days=1)
+                    fecha_fin_periodo = fecha_cierre
+                except Exception as e:
+                    # Si hay error calculando el período, usar el mes actual
+                    fecha_inicio_periodo = fecha_cierre.replace(day=1)
+                    fecha_fin_periodo = fecha_cierre
+                
+                # Obtener gastos del período de cierre
+                gastos_periodo = db.query(models.Gasto).filter(
+                    and_(
+                        models.Gasto.fecha >= fecha_inicio_periodo,
+                        models.Gasto.fecha <= fecha_fin_periodo,
+                        models.Gasto.moneda == tarjeta.moneda
+                    )
+                ).order_by(models.Gasto.fecha.desc()).all()
+                
+                total_gastos_periodo = sum(gasto.monto for gasto in gastos_periodo)
+                
+                # Calcular monto estimado (saldo actual o gastos del período, el que sea mayor)
+                # Para proyecciones futuras, usar los gastos del período si están disponibles
+                monto_estimado = tarjeta.saldo_actual if mes_offset_ajustado == 0 else max(tarjeta.saldo_actual, total_gastos_periodo)
+                
+                # Obtener desglose de la cuota
+                desglose_info = {
+                    'monto_total': monto_estimado,
+                    'capital': 0,
+                    'intereses': 0,
+                    'iva_intereses': 0,
+                    'impuesto_ganancias': 0,
+                    'gastos_administrativos': 0,
+                    'iva_gastos_admin': 0,
+                    'otros_impuestos': 0,
+                    'total_impuestos': 0,
+                    'total_cargos': 0
+                }
+                
+                # Calcular desglose si hay saldo
+                if monto_estimado > 0:
+                    try:
+                        tasa_mensual = getattr(tarjeta, 'tasa_interes_mensual', 0.0) or 0.0
+                        if tasa_mensual == 0:
+                            tasa_anual = getattr(tarjeta, 'tasa_interes_anual', 0.0) or 0.0
+                            if tasa_anual > 0:
+                                tasa_mensual = tasa_anual / 12.0
+                    except:
+                        tasa_mensual = 0.0
+                    
+                    intereses = monto_estimado * (tasa_mensual / 100.0) if tasa_mensual > 0 else 0.0
+                    impuesto_iva_pct = getattr(tarjeta, 'impuesto_iva', 21.0) or 21.0
+                    iva_intereses = intereses * (impuesto_iva_pct / 100.0) if intereses > 0 else 0.0
+                    impuesto_ganancias_pct = getattr(tarjeta, 'impuesto_ganancias', 0.0) or 0.0
+                    impuesto_ganancias = intereses * (impuesto_ganancias_pct / 100.0) if intereses > 0 and impuesto_ganancias_pct > 0 else 0.0
+                    gastos_admin = getattr(tarjeta, 'gastos_administrativos', 1000.0) or 1000.0
+                    iva_gastos_admin = gastos_admin * (impuesto_iva_pct / 100.0) if gastos_admin > 0 else 0.0
+                    impuesto_sellos_pct = getattr(tarjeta, 'impuesto_sellos', 0.0) or 0.0
+                    impuesto_sellos = monto_estimado * (impuesto_sellos_pct / 100.0) if impuesto_sellos_pct > 0 else 0.0
+                    
+                    total_cargos = intereses + iva_intereses + impuesto_ganancias + gastos_admin + iva_gastos_admin + impuesto_sellos
+                    capital = monto_estimado - total_cargos
+                    if capital < 0:
+                        capital = 0
+                    
+                    desglose_info = {
+                        'monto_total': monto_estimado,
+                        'capital': capital,
+                        'intereses': intereses,
+                        'iva_intereses': iva_intereses,
+                        'impuesto_ganancias': impuesto_ganancias,
+                        'gastos_administrativos': gastos_admin,
+                        'iva_gastos_admin': iva_gastos_admin,
+                        'otros_impuestos': impuesto_sellos,
+                        'total_impuestos': iva_intereses + impuesto_ganancias + iva_gastos_admin + impuesto_sellos,
+                        'total_cargos': total_cargos
+                    }
+                
+                # Asegurar que descripcion no sea None
+                gastos_lista = []
+                for gasto in gastos_periodo:
+                    gastos_lista.append({
+                        'id': gasto.id,
+                        'fecha': gasto.fecha.isoformat(),
+                        'monto': gasto.monto,
+                        'tipo': gasto.tipo.value,
+                        'categoria': gasto.categoria if gasto.categoria else None,
+                        'descripcion': gasto.descripcion if gasto.descripcion else None
+                    })
                 
                 proyecciones.append({
                     'tarjeta_id': tarjeta.id,
@@ -662,7 +916,15 @@ def get_proyecciones_tarjetas(meses: int = Query(6, description="Número de mese
                     'fecha_vencimiento': fecha_vencimiento.isoformat(),
                     'monto_estimado': monto_estimado,
                     'moneda': tarjeta.moneda.value,
-                    'mes': fecha_vencimiento.strftime('%Y-%m')
+                    'mes': fecha_vencimiento.strftime('%Y-%m'),
+                    'periodo_cierre': {
+                        'fecha_inicio': fecha_inicio_periodo.isoformat(),
+                        'fecha_fin': fecha_fin_periodo.isoformat()
+                    },
+                    'gastos': gastos_lista,
+                    'total_gastos_periodo': total_gastos_periodo,
+                    'cantidad_gastos': len(gastos_periodo),
+                    'desglose': desglose_info
                 })
     
     # Agrupar por mes

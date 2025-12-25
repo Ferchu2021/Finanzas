@@ -172,16 +172,49 @@ def extraer_movimientos(texto: str) -> List[Dict]:
                         
                         if fecha and monto is not None and monto != 0:
                             # Extraer descripción (todo menos el monto y info de cuotas/números)
-                            descripcion = resto[:match_monto.start()].strip()
-                            # Limpiar descripción: remover cuotas (XX/YY) y números de comprobante
-                            descripcion = re.sub(r'\d{1,2}/\d{1,2}', '', descripcion).strip()
-                            descripcion = re.sub(r'\d{5}', '', descripcion).strip()
-                            descripcion = re.sub(r'\s+', ' ', descripcion).strip()
+                            descripcion_completa = resto[:match_monto.start()].strip()
+                            
+                            # Extraer información de cuotas antes de limpiar (formato: XX/YY)
+                            info_cuotas = None
+                            match_cuotas = re.search(r'(\d{1,2}/\d{1,2})', descripcion_completa)
+                            if match_cuotas:
+                                info_cuotas = match_cuotas.group(1)
+                            
+                            # Limpiar descripción: remover números de comprobante (5 dígitos) pero preservar cuotas
+                            # Primero, intentar capturar descripción completa incluyendo cuotas
+                            descripcion_limpia = descripcion_completa
+                            
+                            # Remover números de comprobante (5 dígitos seguidos)
+                            descripcion_limpia = re.sub(r'\b\d{5}\b', '', descripcion_limpia).strip()
+                            
+                            # Si la descripción parece incompleta (muy corta o termina en "al", "de", etc.), 
+                            # intentar buscar en la línea siguiente
+                            if len(descripcion_limpia) < 10 or descripcion_limpia.lower().endswith((' al', ' de', ' en', ' con')):
+                                # Buscar en la siguiente línea si existe
+                                if i + 1 < len(lineas):
+                                    siguiente_linea = lineas[i + 1].strip()
+                                    # Si la siguiente línea no tiene fecha ni monto, puede ser continuación
+                                    if not re.match(r'^\d{1,2}-[A-Za-z]{3}-\d{2}', siguiente_linea) and not re.search(r'([-]?[\d.,]+)\s*$', siguiente_linea):
+                                        descripcion_limpia = (descripcion_limpia + ' ' + siguiente_linea).strip()
+                            
+                            # Normalizar espacios
+                            descripcion_limpia = re.sub(r'\s+', ' ', descripcion_limpia).strip()
+                            
+                            # Si tenemos información de cuotas, agregarla a la descripción
+                            if info_cuotas:
+                                descripcion_final = f"{descripcion_limpia} (Cuota {info_cuotas})"
+                            else:
+                                descripcion_final = descripcion_limpia
+                            
+                            # Si la descripción está vacía o es muy corta, usar un placeholder
+                            if not descripcion_final or len(descripcion_final) < 3:
+                                descripcion_final = "Compra sin descripción"
                             
                             movimientos.append({
                                 'fecha': fecha,
-                                'descripcion': descripcion,
-                                'monto': abs(monto)  # Usar valor absoluto para gastos
+                                'descripcion': descripcion_final,
+                                'monto': abs(monto),  # Usar valor absoluto para gastos
+                                'cuotas': info_cuotas  # Guardar info de cuotas por separado
                             })
                 except Exception as e:
                     continue

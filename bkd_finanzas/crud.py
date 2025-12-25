@@ -117,6 +117,25 @@ def delete_tarjeta(db: Session, tarjeta_id: int):
     return False
 
 
+# ========== PAGOS DE TARJETAS ==========
+def create_pago_tarjeta(db: Session, pago: schemas.PagoTarjetaCreate):
+    """Crea un pago de tarjeta y actualiza el saldo de la tarjeta"""
+    # Crear el registro de pago
+    db_pago = models.PagoTarjeta(**pago.model_dump())
+    db.add(db_pago)
+    
+    # Actualizar el saldo de la tarjeta
+    tarjeta = get_tarjeta(db, pago.tarjeta_id)
+    if tarjeta:
+        # Reducir el saldo actual (no puede ser negativo)
+        nuevo_saldo = max(0.0, tarjeta.saldo_actual - pago.monto)
+        tarjeta.saldo_actual = nuevo_saldo
+    
+    db.commit()
+    db.refresh(db_pago)
+    return db_pago
+
+
 # ========== PRÉSTAMOS ==========
 def create_prestamo(db: Session, prestamo: schemas.PrestamoCreate):
     db_prestamo = models.Prestamo(**prestamo.model_dump())

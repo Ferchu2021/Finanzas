@@ -122,6 +122,12 @@ class PagoTarjetaCreate(BaseModel):
     descripcion: Optional[str] = None
 
 
+class PagoTarjeta(PagoTarjetaCreate):
+    id: int
+    created_at: date
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ========== PRÉSTAMOS ==========
 class PrestamoBase(BaseModel):
     nombre: str

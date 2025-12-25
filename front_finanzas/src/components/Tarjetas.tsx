@@ -26,15 +26,34 @@ interface DetallesTarjeta {
     fecha_pago: string
     monto: number
     descripcion?: string
+    es_parcial?: boolean
+    saldo_antes_pago?: number
+    saldo_despues_pago?: number
+    porcentaje_del_saldo?: number
   }>
   total_pagado: number
+  monto_total_pendiente?: number
+}
+
+interface GastoPeriodo {
+  id: number
+  fecha: string
+  monto: number
+  descripcion: string
+  categoria: string
+  tipo: string
 }
 
 interface DesgloseCuota {
   tarjeta_id: number
   tarjeta_nombre: string
   fecha_vencimiento: string
+  fecha_cierre?: string
   moneda: string
+  periodo_cierre?: {
+    fecha_inicio: string
+    fecha_fin: string
+  }
   desglose: {
     monto_total: number
     capital: number
@@ -46,6 +65,11 @@ interface DesgloseCuota {
     otros_impuestos: number
     total_impuestos: number
     total_cargos: number
+  }
+  gastos_periodo?: {
+    gastos: GastoPeriodo[]
+    total: number
+    cantidad: number
   }
   porcentajes: {
     tasa_interes_mensual: number
@@ -202,7 +226,7 @@ const Tarjetas: React.FC = () => {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                       <h2 style={{ margin: 0, color: '#2c3e50' }}>{tarjeta.nombre}</h2>
                       {estaPagada && (
                         <span style={{
@@ -214,6 +238,19 @@ const Tarjetas: React.FC = () => {
                           color: '#fff'
                         }}>
                           ✓ PAGADA
+                        </span>
+                      )}
+                      {!estaPagada && (tarjeta as any).tiene_pagos_parciales && (
+                        <span style={{
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '12px',
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold',
+                          backgroundColor: '#ffc107',
+                          color: '#856404',
+                          border: '1px solid #ff9800'
+                        }}>
+                          ⚠ PAGOS PARCIALES {(tarjeta as any).cantidad_pagos_parciales > 0 && `(${(tarjeta as any).cantidad_pagos_parciales})`}
                         </span>
                       )}
                     </div>
@@ -305,6 +342,28 @@ const Tarjetas: React.FC = () => {
                     ✓ Esta tarjeta está completamente pagada. No hay saldo pendiente.
                   </div>
                 )}
+
+                {!estaPagada && (tarjeta as any).tiene_pagos_parciales && (
+                  <div style={{
+                    marginTop: '1rem',
+                    padding: '0.75rem',
+                    backgroundColor: '#fff3cd',
+                    borderRadius: '4px',
+                    fontSize: '0.9rem',
+                    color: '#856404',
+                    border: '1px solid #ffc107'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                      <strong>Esta tarjeta tiene pagos parciales registrados</strong>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.85rem' }}>
+                      Se han realizado {(tarjeta as any).cantidad_pagos_parciales || 'varios'} pago(s) parcial(es). 
+                      El saldo actual de {formatearMonto(tarjeta.saldo_actual, tarjeta.moneda)} aún está pendiente.
+                      Haz clic en "Ver detalles y consumos" para ver el historial completo de pagos.
+                    </p>
+                  </div>
+                )}
                 
                 {!estaPagada && nivelAlerta !== 'normal' && (
                   <div style={{
@@ -375,45 +434,96 @@ const Tarjetas: React.FC = () => {
                         {detalles.pagos.length > 0 && (
                           <div style={{ marginTop: '1.5rem' }}>
                             <h4 style={{ margin: '0 0 0.75rem 0', color: '#2c3e50', fontSize: '1rem' }}>
-                              Pagos Realizados ({detalles.pagos.length})
+                              Historial de Pagos ({detalles.pagos.length})
                             </h4>
-                            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                              {detalles.pagos.map((pago) => (
-                                <div
-                                  key={pago.id}
-                                  style={{
-                                    padding: '0.75rem',
-                                    marginBottom: '0.5rem',
-                                    backgroundColor: '#fff',
-                                    borderRadius: '4px',
-                                    border: '1px solid #e0e0e0',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                  }}
-                                >
-                                  <div>
-                                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.9rem', fontWeight: '500', color: '#2c3e50' }}>
-                                      {formatearFecha(pago.fecha_pago)}
-                                    </p>
-                                    {pago.descripcion && (
-                                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#7f8c8d' }}>
-                                        {pago.descripcion}
-                                      </p>
-                                    )}
+                            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                              {detalles.pagos.map((pago) => {
+                                const esPagoParcial = pago.es_parcial || false
+                                const saldoAntes = pago.saldo_antes_pago || 0
+                                const porcentajePagado = pago.porcentaje_del_saldo || 0
+                                
+                                return (
+                                  <div
+                                    key={pago.id}
+                                    style={{
+                                      padding: '1rem',
+                                      marginBottom: '0.75rem',
+                                      backgroundColor: esPagoParcial ? '#fff3cd' : '#fff',
+                                      borderRadius: '6px',
+                                      border: `2px solid ${esPagoParcial ? '#ffc107' : '#e0e0e0'}`,
+                                      boxShadow: esPagoParcial ? '0 2px 4px rgba(255,193,7,0.2)' : '0 1px 2px rgba(0,0,0,0.1)'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: esPagoParcial ? '0.75rem' : '0' }}>
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                          <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: '600', color: '#2c3e50' }}>
+                                            {formatearFecha(pago.fecha_pago)}
+                                          </p>
+                                          {esPagoParcial && (
+                                            <span style={{
+                                              padding: '0.25rem 0.5rem',
+                                              backgroundColor: '#ffc107',
+                                              color: '#856404',
+                                              borderRadius: '12px',
+                                              fontSize: '0.75rem',
+                                              fontWeight: '600'
+                                            }}>
+                                              PAGO PARCIAL
+                                            </span>
+                                          )}
+                                        </div>
+                                        {pago.descripcion && (
+                                          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: '#7f8c8d' }}>
+                                            {pago.descripcion}
+                                          </p>
+                                        )}
+                                        {esPagoParcial && saldoAntes > 0 && (
+                                          <div style={{
+                                            padding: '0.5rem',
+                                            backgroundColor: '#fff',
+                                            borderRadius: '4px',
+                                            fontSize: '0.8rem',
+                                            color: '#856404',
+                                            marginTop: '0.5rem'
+                                          }}>
+                                            <p style={{ margin: '0 0 0.25rem 0' }}>
+                                              <strong>Saldo antes:</strong> {formatearMonto(saldoAntes, detalles.tarjeta.moneda)}
+                                            </p>
+                                            <p style={{ margin: '0 0 0.25rem 0' }}>
+                                              <strong>Pagado:</strong> {formatearMonto(pago.monto, detalles.tarjeta.moneda)} ({porcentajePagado.toFixed(1)}% del saldo)
+                                            </p>
+                                            <p style={{ margin: 0 }}>
+                                              <strong>Saldo después:</strong> {formatearMonto(pago.saldo_despues_pago || (saldoAntes - pago.monto), detalles.tarjeta.moneda)}
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div style={{ textAlign: 'right', marginLeft: '1rem' }}>
+                                        <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 'bold', color: esPagoParcial ? '#f39c12' : '#27ae60' }}>
+                                          {formatearMonto(pago.monto, detalles.tarjeta.moneda)}
+                                        </p>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <p style={{ margin: 0, fontSize: '1rem', fontWeight: 'bold', color: '#27ae60' }}>
-                                    {formatearMonto(pago.monto, detalles.tarjeta.moneda)}
-                                  </p>
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
-                            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #e0e0e0' }}>
-                              <p style={{ margin: 0, textAlign: 'right', fontSize: '0.9rem', color: '#7f8c8d' }}>
-                                Total pagado: <span style={{ fontWeight: 'bold', color: '#27ae60' }}>
+                            <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                                <span style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>Total pagado:</span>
+                                <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#27ae60' }}>
                                   {formatearMonto(detalles.total_pagado, detalles.tarjeta.moneda)}
                                 </span>
-                              </p>
+                              </div>
+                              {detalles.monto_total_pendiente !== undefined && detalles.monto_total_pendiente > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #e0e0e0' }}>
+                                  <span style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>Saldo actual pendiente:</span>
+                                  <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#e74c3c' }}>
+                                    {formatearMonto(detalles.monto_total_pendiente, detalles.tarjeta.moneda)}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -424,9 +534,34 @@ const Tarjetas: React.FC = () => {
                           </p>
                         )}
 
-                        {/* Desglose de Cuota */}
+                        {/* Explicación del Saldo */}
                         {!detalles.tarjeta.esta_pagada && (
                           <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '2px solid #e0e0e0' }}>
+                            <div style={{
+                              marginBottom: '1.5rem',
+                              padding: '1rem',
+                              backgroundColor: '#e8f4f8',
+                              borderRadius: '8px',
+                              border: '1px solid #bee5eb'
+                            }}>
+                              <h4 style={{ margin: '0 0 0.75rem 0', color: '#0c5460', fontSize: '1rem' }}>
+                                💡 ¿Por qué debo pagar {formatearMonto(detalles.tarjeta.saldo_actual, detalles.tarjeta.moneda)}?
+                              </h4>
+                              <div style={{ fontSize: '0.9rem', color: '#0c5460', lineHeight: '1.6' }}>
+                                <p style={{ margin: '0 0 0.5rem 0' }}>
+                                  El <strong>monto a pagar</strong> incluye:
+                                </p>
+                                <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem' }}>
+                                  <li><strong>Saldo anterior:</strong> Compras de períodos anteriores que aún no pagaste</li>
+                                  <li><strong>Gastos nuevos:</strong> Compras del período actual (02/12/2025 - 01/01/2026)</li>
+                                  <li><strong>Cargos e impuestos:</strong> Intereses, IVA, gastos administrativos del banco</li>
+                                </ul>
+                                <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                                  Los gastos que ves en la tabla son solo los del período actual. El saldo total incluye todo lo que debes.
+                                </p>
+                              </div>
+                            </div>
+
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                               <h3 style={{ margin: 0, color: '#2c3e50', fontSize: '1.1rem' }}>Desglose de Próxima Cuota</h3>
                               <button
@@ -623,6 +758,114 @@ const Tarjetas: React.FC = () => {
                                           </p>
                                         </div>
                                       </div>
+
+                                      {/* Gastos del Período */}
+                                      {desglose.gastos_periodo && desglose.gastos_periodo.gastos.length > 0 && (
+                                        <div style={{ 
+                                          marginTop: '1.5rem',
+                                          padding: '1rem', 
+                                          backgroundColor: '#fff', 
+                                          borderRadius: '4px',
+                                          border: '1px solid #e0e0e0'
+                                        }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                            <h4 style={{ margin: 0, fontSize: '1rem', color: '#2c3e50' }}>
+                                              📋 Gastos del Período ({desglose.gastos_periodo.cantidad})
+                                            </h4>
+                                            {desglose.periodo_cierre && (
+                                              <span style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>
+                                                {formatearFecha(desglose.periodo_cierre.fecha_inicio)} - {formatearFecha(desglose.periodo_cierre.fecha_fin)}
+                                              </span>
+                                            )}
+                                          </div>
+                                          
+                                          <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: '1rem' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                                              <thead>
+                                                <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #e0e0e0' }}>
+                                                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#2c3e50' }}>Fecha</th>
+                                                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#2c3e50' }}>Descripción</th>
+                                                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#2c3e50' }}>Categoría</th>
+                                                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#2c3e50' }}>Tipo</th>
+                                                  <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#2c3e50' }}>Monto</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {desglose.gastos_periodo.gastos.map((gasto) => (
+                                                  <tr key={gasto.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                                                    <td style={{ padding: '0.75rem', color: '#2c3e50' }}>{formatearFecha(gasto.fecha)}</td>
+                                                    <td style={{ padding: '0.75rem', color: '#2c3e50', maxWidth: '300px' }}>
+                                                      <div style={{ 
+                                                        fontWeight: gasto.descripcion.toLowerCase().includes('llamando al') ? 'normal' : '500',
+                                                        fontStyle: gasto.descripcion.toLowerCase().includes('llamando al') ? 'italic' : 'normal',
+                                                        color: gasto.descripcion.toLowerCase().includes('llamando al') ? '#e74c3c' : '#2c3e50'
+                                                      }}>
+                                                        {gasto.descripcion}
+                                                      </div>
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', color: '#7f8c8d' }}>
+                                                      <span style={{
+                                                        padding: '0.25rem 0.5rem',
+                                                        backgroundColor: '#e3f2fd',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.8rem'
+                                                      }}>
+                                                        {gasto.categoria}
+                                                      </span>
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', color: '#7f8c8d', fontSize: '0.85rem' }}>
+                                                      {gasto.tipo}
+                                                    </td>
+                                                    <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#e74c3c' }}>
+                                                      {formatearMonto(gasto.monto, desglose.moneda)}
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                              <tfoot>
+                                                <tr style={{ backgroundColor: '#f8f9fa', borderTop: '2px solid #e0e0e0' }}>
+                                                  <td colSpan={4} style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#2c3e50' }}>
+                                                    Total Gastos:
+                                                  </td>
+                                                  <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold', color: '#e74c3c', fontSize: '1rem' }}>
+                                                    {formatearMonto(desglose.gastos_periodo.total, desglose.moneda)}
+                                                  </td>
+                                                </tr>
+                                              </tfoot>
+                                            </table>
+                                          </div>
+                                          
+                                          <div style={{ 
+                                            padding: '0.75rem', 
+                                            backgroundColor: '#e8f4f8', 
+                                            borderRadius: '4px',
+                                            fontSize: '0.85rem',
+                                            color: '#0c5460'
+                                          }}>
+                                            <p style={{ margin: 0 }}>
+                                              💡 <strong>Nota:</strong> Estos son los gastos registrados en el período de cierre. 
+                                              El monto total a pagar incluye estos gastos más el saldo anterior y los cargos del banco.
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {desglose.gastos_periodo && desglose.gastos_periodo.gastos.length === 0 && (
+                                        <div style={{ 
+                                          marginTop: '1.5rem',
+                                          padding: '1rem', 
+                                          backgroundColor: '#f8f9fa', 
+                                          borderRadius: '4px',
+                                          border: '1px solid #e0e0e0',
+                                          textAlign: 'center'
+                                        }}>
+                                          <p style={{ margin: 0, color: '#7f8c8d', fontSize: '0.9rem' }}>
+                                            No hay gastos registrados para este período de cierre.
+                                            <br />
+                                            El saldo puede incluir compras de períodos anteriores o cargos del banco.
+                                          </p>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 ) : (
