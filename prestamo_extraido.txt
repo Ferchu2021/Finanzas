@@ -1,0 +1,290 @@
+=== TEXTO EXTRAIDO ===
+
+1:17 [n j @ @
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+Resumen
+Cuotas
+10/05/2025
+Cuota 1
+Pagada
+$275.180,83
+Interes nominal
+S218.537,63
+Interes compensatorios
+S7166,84
+Int.punitorios
+$3.583,42
+Iva interes nominal
+$45.892,94
+10/06/2025
+Cuota 2
+Pagada
+$260.968,38
+10/07/2025
+Cuota 3
+Pagada
+$259.496,82
+10/08/2025
+Cuota 4
+Pagada
+$260.844,81
+10/09/2025
+Cuota 5
+Pagada
+$260.815,77
+10/10/2025
+
+1817 [ j @ @
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+10/10/2025
+Cuota 6
+Pagada
+$259.341,24
+10/11/2025
+Cuota 7
+Pagada
+$260.675,71
+10/12/2025
+Cuota 8
+En Mora
+$259.198,43
+10/01/2026
+Cuota 9
+Vencer
+$260.520,50
+10/02/2026
+Cuota 10
+Vencer
+$260.474,12
+10/03/2026
+Cuota 11
+A Vencer
+$256.128,23
+10/04/2026
+Cuota 12
+Vencer
+$260.143,85
+
+1:18 [ j
+@
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+10/05/2026
+Cuota 13
+Vencer
+$258.656,20
+10/06/2026
+Cuota 14
+Vencer
+$259.931,18
+10/07/2026
+Cuota 15
+Vencer
+$258.439,37
+10/08/2026
+Cuota 16
+Vencer
+$259.695,52
+10/09/2026
+Cuota 17
+A Vencer
+4259.605,00
+10/10/2026
+Cuota 18
+A Vencer
+$258.106,82
+10/11/2026
+Cuota 19
+Vencer
+$259.334,09
+10/19/9092
+
+1:18 [ j
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+10/12/2026
+Cuota 20
+A Vencer
+$257.830,63
+10/01/2027
+Cuota 21
+A Vencer
+$259.033,92
+10/02/2027
+Cuota 22
+A Vencer
+$258.907,99
+10/03/2027
+Cuota 23
+A Vencer
+$254.637,97
+10/04/2027
+Cuota 24
+A Vencer
+$258.414,19
+10/05/2027
+Cuota 25
+A Vencer
+$256.892,76
+10/06/2027
+Cuota 26
+A Vencer
+$258.014,61
+
+1:18 [ j
+@
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+10/10/2030
+Cuota 66
+A Vencer
+$229.497,42
+10/11/2030
+Cuota 67
+A Vencer
+$228.240,24
+10/12/2030
+Cuota 68
+A Vencer
+$226.129,74
+10/01/2031
+Cuota 69
+A Vencer
+$224.580,12
+10/02/2031
+Cuota 70
+Vencer
+$222.610,68
+10/03/2031
+Cuota 71
+Vencer
+$220.099,10
+10/04/2031
+Cuota 72
+A Vencer
+$218.324,82
+
+1:18 [ j
+@
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+10/06/2030
+Cuota 62
+A Vencer
+$235.892,43
+10/07/2030
+Cuota 63
+A Vencer
+$233.931,31
+10/08/2030
+Cuota 64
+A Vencer
+$233.059,18
+10/09/2030
+Cuota 65
+A Vencer
+$231.543,43
+10/10/2030
+Cuota 66
+A Vencer
+$229.497,42
+10/11/2030
+Cuota 67
+A Vencer
+$228.240,24
+10/12/2030
+Cuota 68
+A Vencer
+$226.129,74
+1n/n1/2021
+
+1:18 [ j
+@
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+10/11/2029
+Cuota 55
+A Vencer
+$243.848,40
+10/12/2029
+Cuota 56
+A Vencer
+$242.042,62
+10/01/2030
+Cuota 57
+A Vencer
+$241.874,87
+10/02/2030
+Cuota 58
+A Vencer
+$240.830,82
+10/03/2030
+Cuota 59
+A Vencer
+$237.436,55
+10/04/2030
+Cuota 60
+A Vencer
+$238.449,37
+10/05/2030
+Cuota 61
+Vencer
+$236.538,18
+
+1:18 [ j
+8 ,i
+28
+PRÉSTAMOS
+Detalle del préstamo
+10/04/2029
+Cuota 48
+A Vencer
+$249.339,34
+10/05/2029
+Cuota 49
+A Vencer
+$247.640,75
+10/06/2029
+Cuota 50
+A Vencer
+$247.959,14
+10/07/2029
+Cuota 51
+Vencer
+$246.233,61
+10/08/2029
+Cuota 52
+A Vencer
+$246.429,81
+10/09/2029
+Cuota 53
+A Vencer
+$245.629,48
+10/10/2029
+Cuota 54
+A Vencer
+$243.858,46
+
+
+
+=== DATOS EXTRAIDOS ===
+
+cuota_mensual: 246935.30584905657
+fecha_inicio: 2025-05-10
+fecha_vencimiento: 2031-04-10

@@ -18,8 +18,6 @@ interface DesgloseCuota {
   impuesto_ganancias: number
   gastos_administrativos: number
   iva_gastos_admin?: number
-  seguro?: number
-  iva_seguro?: number
   otros_impuestos: number
   total_impuestos: number
   total_cargos: number
@@ -50,38 +48,12 @@ interface ProyeccionTarjeta {
   }>
 }
 
-interface ProyeccionPrestamo {
-  mes: string
-  fecha_vencimiento: string
-  cantidad_cuotas: number
-  total_ars: number
-  total_usd: number
-  detalle: Array<{
-    prestamo_id: number
-    prestamo_nombre: string
-    prestamista?: string
-    fecha_vencimiento: string
-    numero_cuota: number
-    monto_pendiente: number
-    moneda: string
-    desglose?: DesgloseCuota
-    porcentajes?: {
-      tasa_interes_anual: number
-      tasa_interes_mensual: number
-      impuesto_iva: number
-      impuesto_ganancias: number
-    }
-  }>
-}
-
 const Proyecciones: React.FC = () => {
-  const [proyeccionesTarjetas, setProyeccionesTarjetas] = useState<ProyeccionTarjeta[]>([])
-  const [proyeccionesPrestamos, setProyeccionesPrestamos] = useState<ProyeccionPrestamo[]>([])
+  const [proyecciones, setProyecciones] = useState<ProyeccionTarjeta[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [meses, setMeses] = useState(6)
   const [tarjetasExpandidas, setTarjetasExpandidas] = useState<Set<string>>(new Set())
-  const [prestamosExpandidos, setPrestamosExpandidos] = useState<Set<string>>(new Set())
   const [gastosEditando, setGastosEditando] = useState<Map<number, string>>(new Map())
   const [gastosGuardando, setGastosGuardando] = useState<Set<number>>(new Set())
 
@@ -92,12 +64,8 @@ const Proyecciones: React.FC = () => {
   const cargarProyecciones = async () => {
     try {
       setLoading(true)
-      const [responseTarjetas, responsePrestamos] = await Promise.all([
-        api.get(`/proyecciones/tarjetas?meses=${meses}`),
-        api.get(`/proyecciones/prestamos?meses=${meses}`)
-      ])
-      setProyeccionesTarjetas(responseTarjetas.data)
-      setProyeccionesPrestamos(responsePrestamos.data)
+      const response = await api.get(`/proyecciones/tarjetas?meses=${meses}`)
+      setProyecciones(response.data)
       setError(null)
     } catch (err: any) {
       setError('Error al cargar las proyecciones: ' + (err.message || 'Error desconocido'))
@@ -105,24 +73,6 @@ const Proyecciones: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
-
-  // Obtener todos los meses únicos
-  const obtenerTodosLosMeses = (): string[] => {
-    const mesesSet = new Set<string>()
-    proyeccionesTarjetas.forEach(p => mesesSet.add(p.mes))
-    proyeccionesPrestamos.forEach(p => mesesSet.add(p.mes))
-    return Array.from(mesesSet).sort()
-  }
-
-  // Obtener proyección de tarjetas para un mes
-  const getProyeccionTarjetasPorMes = (mes: string): ProyeccionTarjeta | null => {
-    return proyeccionesTarjetas.find(p => p.mes === mes) || null
-  }
-
-  // Obtener proyección de préstamos para un mes
-  const getProyeccionPrestamosPorMes = (mes: string): ProyeccionPrestamo | null => {
-    return proyeccionesPrestamos.find(p => p.mes === mes) || null
   }
 
   const formatearMonto = (monto: number, moneda: string): string => {
@@ -156,17 +106,6 @@ const Proyecciones: React.FC = () => {
     setTarjetasExpandidas(nuevas)
   }
 
-  const togglePrestamo = (prestamoId: number, mes: string) => {
-    const key = `${prestamoId}-${mes}`
-    const nuevas = new Set(prestamosExpandidos)
-    if (nuevas.has(key)) {
-      nuevas.delete(key)
-    } else {
-      nuevas.add(key)
-    }
-    setPrestamosExpandidos(nuevas)
-  }
-
   const iniciarEdicionGasto = (gastoId: number, descripcionActual: string) => {
     const nuevas = new Map(gastosEditando)
     nuevas.set(gastoId, descripcionActual || '')
@@ -188,7 +127,7 @@ const Proyecciones: React.FC = () => {
       await gastosApi.update(gastoId, { descripcion: nuevaDescripcion })
       
       // Actualizar la proyección local
-      setProyeccionesTarjetas(prev => prev.map(proy => ({
+      setProyecciones(prev => prev.map(proy => ({
         ...proy,
         detalle: proy.detalle.map(det => ({
           ...det,
@@ -231,7 +170,7 @@ const Proyecciones: React.FC = () => {
   return (
     <div style={{ padding: '2rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1>Proyecciones de Pagos</h1>
+        <h1>Proyecciones de Pagos - Tarjetas de Crédito</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <label htmlFor="meses">Meses a proyectar:</label>
           <select
@@ -247,30 +186,21 @@ const Proyecciones: React.FC = () => {
         </div>
       </div>
 
-      {obtenerTodosLosMeses().length === 0 ? (
+      {proyecciones.length === 0 ? (
         <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#fff', borderRadius: '8px', marginTop: '1rem' }}>
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
           <h3 style={{ margin: '0 0 0.5rem 0', color: '#27ae60' }}>¡Excelente!</h3>
           <p style={{ margin: 0, color: '#7f8c8d' }}>
-            No hay proyecciones de pagos para los próximos {meses} meses.
+            No hay proyecciones de pagos de tarjetas para los próximos {meses} meses.
             <br />
-            Esto significa que todas tus tarjetas y préstamos están pagados o no tienen saldo pendiente.
+            Esto significa que todas tus tarjetas están pagadas o no tienen saldo pendiente.
           </p>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '1.5rem' }}>
-          {obtenerTodosLosMeses().map((mes) => {
-            const proyTarjetas = getProyeccionTarjetasPorMes(mes)
-            const proyPrestamos = getProyeccionPrestamosPorMes(mes)
-            
-            const totalCuotas = (proyTarjetas?.cantidad_cuotas || 0) + (proyPrestamos?.cantidad_cuotas || 0)
-            const totalArs = (proyTarjetas?.total_ars || 0) + (proyPrestamos?.total_ars || 0)
-            const totalUsd = (proyTarjetas?.total_usd || 0) + (proyPrestamos?.total_usd || 0)
-            const fechaVencimiento = proyTarjetas?.fecha_vencimiento || proyPrestamos?.fecha_vencimiento || ''
-            
-            return (
+          {proyecciones.map((proyeccion, index) => (
             <div
-              key={mes}
+              key={index}
               style={{
                 backgroundColor: '#fff',
                 padding: '1.5rem',
@@ -281,40 +211,37 @@ const Proyecciones: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '2px solid #ecf0f1' }}>
                 <div>
                   <h2 style={{ margin: 0, color: '#2c3e50', textTransform: 'capitalize' }}>
-                    {formatearMes(mes)}
+                    {formatearMes(proyeccion.mes)}
                   </h2>
-                  {fechaVencimiento && (
-                    <p style={{ margin: '0.5rem 0 0 0', color: '#7f8c8d', fontSize: '0.9rem' }}>
-                      Vencimiento: {formatearFecha(fechaVencimiento)}
-                    </p>
-                  )}
+                  <p style={{ margin: '0.5rem 0 0 0', color: '#7f8c8d', fontSize: '0.9rem' }}>
+                    Vencimiento: {formatearFecha(proyeccion.fecha_vencimiento)}
+                  </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: '#7f8c8d' }}>
-                    {totalCuotas} {totalCuotas === 1 ? 'cuota' : 'cuotas'}
+                    {proyeccion.cantidad_cuotas} {proyeccion.cantidad_cuotas === 1 ? 'cuota' : 'cuotas'}
                   </p>
-                  {totalArs > 0 && (
+                  {proyeccion.total_ars > 0 && (
                     <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold', color: '#e74c3c' }}>
-                      {formatearMonto(totalArs, 'ARS')}
+                      {formatearMonto(proyeccion.total_ars, 'ARS')}
                     </p>
                   )}
-                  {totalUsd > 0 && (
+                  {proyeccion.total_usd > 0 && (
                     <p style={{ margin: '0.25rem 0 0 0', fontSize: '1.25rem', fontWeight: 'bold', color: '#3498db' }}>
-                      {formatearMonto(totalUsd, 'USD')}
+                      {formatearMonto(proyeccion.total_usd, 'USD')}
                     </p>
                   )}
                 </div>
               </div>
 
               <div style={{ display: 'grid', gap: '1rem' }}>
-                {/* Renderizar tarjetas */}
-                {proyTarjetas && proyTarjetas.detalle.map((detalle, detalleIndex) => {
+                {proyeccion.detalle.map((detalle, detalleIndex) => {
                   const diasRestantes = Math.ceil((new Date(detalle.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
                   const estaPagada = detalle.monto_estimado <= 0
                   
                   return (
                     <div
-                      key={`tarjeta-${detalleIndex}`}
+                      key={detalleIndex}
                       style={{
                         padding: '1.25rem',
                         backgroundColor: estaPagada ? '#d4edda' : '#f8f9fa',
@@ -463,12 +390,12 @@ const Proyecciones: React.FC = () => {
 
                           {/* Botón para ver detalles completos */}
                           <button
-                            onClick={() => toggleGastos(detalle.tarjeta_id, mes)}
+                            onClick={() => toggleGastos(detalle.tarjeta_id, proyeccion.mes)}
                             style={{
                               width: '100%',
                               padding: '0.75rem',
-                              backgroundColor: tarjetasExpandidas.has(`${detalle.tarjeta_id}-${mes}`) ? '#3498db' : '#ecf0f1',
-                              color: tarjetasExpandidas.has(`${detalle.tarjeta_id}-${mes}`) ? '#fff' : '#2c3e50',
+                              backgroundColor: tarjetasExpandidas.has(`${detalle.tarjeta_id}-${proyeccion.mes}`) ? '#3498db' : '#ecf0f1',
+                              color: tarjetasExpandidas.has(`${detalle.tarjeta_id}-${proyeccion.mes}`) ? '#fff' : '#2c3e50',
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -481,14 +408,14 @@ const Proyecciones: React.FC = () => {
                               gap: '0.5rem'
                             }}
                           >
-                            <span>{tarjetasExpandidas.has(`${detalle.tarjeta_id}-${mes}`) ? '▼' : '▶'}</span>
-                            <span>{tarjetasExpandidas.has(`${detalle.tarjeta_id}-${mes}`) ? 'Ocultar' : 'Ver'} detalles completos de gastos y desglose</span>
+                            <span>{tarjetasExpandidas.has(`${detalle.tarjeta_id}-${proyeccion.mes}`) ? '▼' : '▶'}</span>
+                            <span>{tarjetasExpandidas.has(`${detalle.tarjeta_id}-${proyeccion.mes}`) ? 'Ocultar' : 'Ver'} detalles completos de gastos y desglose</span>
                           </button>
                         </div>
                       )}
 
                       {/* Panel de gastos y desglose expandido */}
-                      {!estaPagada && tarjetasExpandidas.has(`${detalle.tarjeta_id}-${mes}`) && (
+                      {!estaPagada && tarjetasExpandidas.has(`${detalle.tarjeta_id}-${proyeccion.mes}`) && (
                         <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #e0e0e0' }}>
                           {/* Período de cierre */}
                           {detalle.periodo_cierre && (
@@ -543,6 +470,7 @@ const Proyecciones: React.FC = () => {
                                   <tbody>
                                     {detalle.gastos.map((gasto) => {
                                       // Detectar si tiene información de cuotas en la descripción
+                                      const tieneCuotas = gasto.descripcion && /\(Cuota\s+\d+\/\d+\)/i.test(gasto.descripcion)
                                       const descripcionLimpia = gasto.descripcion ? gasto.descripcion.replace(/\s*\(Cuota\s+\d+\/\d+\)/i, '').trim() : gasto.tipo
                                       const matchCuotas = gasto.descripcion ? gasto.descripcion.match(/\(Cuota\s+(\d+)\/(\d+)\)/i) : null
                                       const estaEditando = gastosEditando.has(gasto.id)
@@ -785,245 +713,13 @@ const Proyecciones: React.FC = () => {
                     </div>
                   )
                 })}
-                
-                {/* Renderizar préstamos */}
-                {proyPrestamos && proyPrestamos.detalle.map((detalle, detalleIndex) => {
-                  const diasRestantes = Math.ceil((new Date(detalle.fecha_vencimiento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-                  const montoEstimado = detalle.desglose?.monto_total || 0
-                  
-                  return (
-                    <div
-                      key={`prestamo-${detalleIndex}`}
-                      style={{
-                        padding: '1.25rem',
-                        backgroundColor: '#f8f9fa',
-                        borderRadius: '8px',
-                        borderLeft: '4px solid #9b59b6',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                        marginTop: '1rem'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                        <div style={{ flex: 1 }}>
-                          <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#2c3e50', fontWeight: '600' }}>
-                            {detalle.prestamo_nombre}
-                            {detalle.prestamista && (
-                              <span style={{ fontSize: '0.9rem', color: '#7f8c8d', marginLeft: '0.5rem', fontWeight: 'normal' }}>
-                                ({detalle.prestamista})
-                              </span>
-                            )}
-                            <span style={{ fontSize: '0.9rem', color: '#9b59b6', marginLeft: '0.5rem', fontWeight: 'normal' }}>
-                              - Cuota #{detalle.numero_cuota}
-                            </span>
-                          </h3>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginTop: '0.75rem' }}>
-                            <div>
-                              <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Fecha de Vencimiento
-                              </p>
-                              <p style={{ margin: 0, fontSize: '0.95rem', color: '#2c3e50', fontWeight: '500' }}>
-                                {formatearFecha(detalle.fecha_vencimiento)}
-                              </p>
-                            </div>
-                            <div>
-                              <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Días Restantes
-                              </p>
-                              <p style={{ 
-                                margin: 0, 
-                                fontSize: '0.95rem', 
-                                color: diasRestantes <= 7 ? '#e74c3c' : diasRestantes <= 15 ? '#f39c12' : '#27ae60',
-                                fontWeight: '600'
-                              }}>
-                                {diasRestantes} {diasRestantes === 1 ? 'día' : 'días'}
-                              </p>
-                            </div>
-                            <div>
-                              <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Moneda
-                              </p>
-                              <p style={{ margin: 0, fontSize: '0.95rem', color: '#2c3e50', fontWeight: '500' }}>
-                                {detalle.moneda}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right', marginLeft: '1.5rem' }}>
-                          <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.8rem', color: '#7f8c8d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            Monto a Pagar
-                          </p>
-                          <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold', color: '#e74c3c' }}>
-                            {formatearMonto(montoEstimado, detalle.moneda)}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {diasRestantes <= 7 && (
-                        <div style={{
-                          marginTop: '1rem',
-                          padding: '0.75rem',
-                          backgroundColor: '#fee',
-                          borderRadius: '6px',
-                          border: '1px solid #fcc',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem'
-                        }}>
-                          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                          <p style={{ margin: 0, fontSize: '0.9rem', color: '#c0392b' }}>
-                            <strong>Atención:</strong> Esta cuota vence en {diasRestantes} {diasRestantes === 1 ? 'día' : 'días'}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Botón para ver desglose */}
-                      {detalle.desglose && (
-                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e0e0e0' }}>
-                          <button
-                            onClick={() => togglePrestamo(detalle.prestamo_id, mes)}
-                            style={{
-                              width: '100%',
-                              padding: '0.75rem',
-                              backgroundColor: prestamosExpandidos.has(`${detalle.prestamo_id}-${mes}`) ? '#9b59b6' : '#ecf0f1',
-                              color: prestamosExpandidos.has(`${detalle.prestamo_id}-${mes}`) ? '#fff' : '#2c3e50',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.9rem',
-                              fontWeight: '500',
-                              transition: 'all 0.2s',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '0.5rem'
-                            }}
-                          >
-                            <span>{prestamosExpandidos.has(`${detalle.prestamo_id}-${mes}`) ? '▼' : '▶'}</span>
-                            <span>{prestamosExpandidos.has(`${detalle.prestamo_id}-${mes}`) ? 'Ocultar' : 'Ver'} desglose completo de la cuota</span>
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Desglose expandido */}
-                      {detalle.desglose && prestamosExpandidos.has(`${detalle.prestamo_id}-${mes}`) && (
-                        <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #e0e0e0' }}>
-                          <h4 style={{ margin: '0 0 0.75rem 0', fontSize: '1rem', color: '#2c3e50' }}>
-                            Desglose de la Cuota #{detalle.numero_cuota}
-                          </h4>
-                          <div style={{ display: 'grid', gap: '0.5rem', marginBottom: '1rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                              <span style={{ fontSize: '0.9rem', color: '#2c3e50' }}>Monto Pendiente</span>
-                              <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#2c3e50' }}>
-                                {formatearMonto(detalle.monto_pendiente, detalle.moneda)}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#d4edda', borderRadius: '4px' }}>
-                              <span style={{ fontSize: '0.9rem', color: '#155724' }}>Capital</span>
-                              <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#155724' }}>
-                                {formatearMonto(detalle.desglose.capital, detalle.moneda)}
-                              </span>
-                            </div>
-                            
-                            {detalle.desglose.intereses > 0 && (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
-                                <span style={{ fontSize: '0.9rem', color: '#856404' }}>Intereses</span>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#856404' }}>
-                                  {formatearMonto(detalle.desglose.intereses, detalle.moneda)}
-                                </span>
-                              </div>
-                            )}
-                            
-                            {detalle.desglose.iva_intereses > 0 && (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#ffeaa7', borderRadius: '4px' }}>
-                                <span style={{ fontSize: '0.9rem', color: '#856404' }}>IVA sobre Intereses</span>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#856404' }}>
-                                  {formatearMonto(detalle.desglose.iva_intereses, detalle.moneda)}
-                                </span>
-                              </div>
-                            )}
-                            
-                            {detalle.desglose.gastos_administrativos > 0 && (
-                              <>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#ffeaa7', borderRadius: '4px' }}>
-                                  <span style={{ fontSize: '0.9rem', color: '#856404' }}>Gastos Administrativos</span>
-                                  <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#856404' }}>
-                                    {formatearMonto(detalle.desglose.gastos_administrativos, detalle.moneda)}
-                                  </span>
-                                </div>
-                                {detalle.desglose.iva_gastos_admin && detalle.desglose.iva_gastos_admin > 0 && (
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#ffeaa7', borderRadius: '4px', marginLeft: '1rem', borderLeft: '3px solid #f39c12' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#856404' }}>→ IVA sobre Gastos Admin.</span>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#856404' }}>
-                                      {formatearMonto(detalle.desglose.iva_gastos_admin, detalle.moneda)}
-                                    </span>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                            
-                            {detalle.desglose.seguro && detalle.desglose.seguro > 0 && (
-                              <>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#ffeaa7', borderRadius: '4px' }}>
-                                  <span style={{ fontSize: '0.9rem', color: '#856404' }}>Seguro</span>
-                                  <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#856404' }}>
-                                    {formatearMonto(detalle.desglose.seguro, detalle.moneda)}
-                                  </span>
-                                </div>
-                                {detalle.desglose.iva_seguro && detalle.desglose.iva_seguro > 0 && (
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#ffeaa7', borderRadius: '4px', marginLeft: '1rem', borderLeft: '3px solid #f39c12' }}>
-                                    <span style={{ fontSize: '0.85rem', color: '#856404' }}>→ IVA sobre Seguro</span>
-                                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#856404' }}>
-                                      {formatearMonto(detalle.desglose.iva_seguro, detalle.moneda)}
-                                    </span>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                            
-                            {detalle.desglose.otros_impuestos > 0 && (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', backgroundColor: '#ffeaa7', borderRadius: '4px' }}>
-                                <span style={{ fontSize: '0.9rem', color: '#856404' }}>Otros Impuestos</span>
-                                <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#856404' }}>
-                                  {formatearMonto(detalle.desglose.otros_impuestos, detalle.moneda)}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div style={{ 
-                            padding: '1rem', 
-                            backgroundColor: '#2c3e50', 
-                            borderRadius: '4px',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '0.75rem'
-                          }}>
-                            <span style={{ fontSize: '1rem', fontWeight: '600', color: '#fff' }}>Total a Pagar</span>
-                            <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#fff' }}>
-                              {formatearMonto(detalle.desglose.monto_total, detalle.moneda)}
-                            </span>
-                          </div>
-
-                          <div style={{ padding: '0.75rem', backgroundColor: '#fee', borderRadius: '4px' }}>
-                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#c0392b' }}>
-                              <strong>Total de Cargos:</strong> {formatearMonto(detalle.desglose.total_cargos, detalle.moneda)} 
-                              ({((detalle.desglose.total_cargos / detalle.desglose.monto_total) * 100).toFixed(2)}% del total)
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
               </div>
             </div>
-            )
-          })}
+          ))}
         </div>
       )}
 
-      {obtenerTodosLosMeses().length > 0 && (
+      {proyecciones.length > 0 && (
         <div style={{
           marginTop: '2rem',
           padding: '1.5rem',
@@ -1034,38 +730,28 @@ const Proyecciones: React.FC = () => {
         }}>
           <h3 style={{ margin: '0 0 1rem 0' }}>Resumen Total</h3>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap' }}>
-            {(() => {
-              const totalArs = proyeccionesTarjetas.reduce((sum, p) => sum + p.total_ars, 0) + proyeccionesPrestamos.reduce((sum, p) => sum + p.total_ars, 0)
-              const totalUsd = proyeccionesTarjetas.reduce((sum, p) => sum + p.total_usd, 0) + proyeccionesPrestamos.reduce((sum, p) => sum + p.total_usd, 0)
-              const totalCuotas = proyeccionesTarjetas.reduce((sum, p) => sum + p.cantidad_cuotas, 0) + proyeccionesPrestamos.reduce((sum, p) => sum + p.cantidad_cuotas, 0)
-              
-              return (
-                <>
-                  {totalArs > 0 && (
-                    <div>
-                      <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total ARS</p>
-                      <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                        {formatearMonto(totalArs, 'ARS')}
-                      </p>
-                    </div>
-                  )}
-                  {totalUsd > 0 && (
-                    <div>
-                      <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total USD</p>
-                      <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                        {formatearMonto(totalUsd, 'USD')}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total de Cuotas</p>
-                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
-                      {totalCuotas}
-                    </p>
-                  </div>
-                </>
-              )
-            })()}
+            {proyecciones.reduce((sum, p) => sum + p.total_ars, 0) > 0 && (
+              <div>
+                <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total ARS</p>
+                <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                  {formatearMonto(proyecciones.reduce((sum, p) => sum + p.total_ars, 0), 'ARS')}
+                </p>
+              </div>
+            )}
+            {proyecciones.reduce((sum, p) => sum + p.total_usd, 0) > 0 && (
+              <div>
+                <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total USD</p>
+                <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                  {formatearMonto(proyecciones.reduce((sum, p) => sum + p.total_usd, 0), 'USD')}
+                </p>
+              </div>
+            )}
+            <div>
+              <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>Total de Cuotas</p>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '1.5rem', fontWeight: 'bold' }}>
+                {proyecciones.reduce((sum, p) => sum + p.cantidad_cuotas, 0)}
+              </p>
+            </div>
           </div>
         </div>
       )}
