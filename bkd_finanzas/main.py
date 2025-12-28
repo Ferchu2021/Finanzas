@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import List, Optional
 from datetime import date
 
@@ -10,6 +12,7 @@ import schemas
 import reports
 import alerts
 import pdf_processor
+import report_generator
 
 # Crear tablas
 Base.metadata.create_all(bind=engine)
@@ -551,6 +554,80 @@ def get_saldos_positivos(ano: int = Query(...), mes: int = Query(...), db: Sessi
 @app.get("/api/reportes/resumen-mensual")
 def get_resumen_mensual(ano: int = Query(...), mes: int = Query(...), db: Session = Depends(get_db)):
     return reports.resumen_mensual(db, ano, mes)
+
+@app.get("/api/reportes/gastos/pdf")
+def generar_reporte_pdf_gastos(
+    fecha_inicio: str = Query(..., description="Fecha inicio (YYYY-MM-DD)"),
+    fecha_fin: str = Query(..., description="Fecha fin (YYYY-MM-DD)"),
+    db: Session = Depends(get_db)
+):
+    """Genera un reporte PDF de gastos por rango de fechas"""
+    try:
+        fecha_ini = date.fromisoformat(fecha_inicio)
+        fecha_f = date.fromisoformat(fecha_fin)
+        
+        if fecha_ini > fecha_f:
+            raise HTTPException(status_code=400, detail="La fecha de inicio debe ser anterior a la fecha de fin")
+        
+        # Obtener gastos en el rango de fechas
+        gastos = db.query(models.Gasto).filter(
+            and_(
+                models.Gasto.fecha >= fecha_ini,
+                models.Gasto.fecha <= fecha_f
+            )
+        ).all()
+        
+        # Generar PDF
+        pdf_buffer = report_generator.generar_reporte_pdf_gastos(gastos, fecha_ini, fecha_f)
+        
+        return Response(
+            content=pdf_buffer.read(),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=reporte_gastos_{fecha_ini.strftime('%Y%m%d')}_{fecha_f.strftime('%Y%m%d')}.pdf"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Formato de fecha inválido: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el reporte PDF: {str(e)}")
+
+@app.get("/api/reportes/gastos/excel")
+def generar_reporte_excel_gastos(
+    fecha_inicio: str = Query(..., description="Fecha inicio (YYYY-MM-DD)"),
+    fecha_fin: str = Query(..., description="Fecha fin (YYYY-MM-DD)"),
+    db: Session = Depends(get_db)
+):
+    """Genera un reporte Excel de gastos por rango de fechas"""
+    try:
+        fecha_ini = date.fromisoformat(fecha_inicio)
+        fecha_f = date.fromisoformat(fecha_fin)
+        
+        if fecha_ini > fecha_f:
+            raise HTTPException(status_code=400, detail="La fecha de inicio debe ser anterior a la fecha de fin")
+        
+        # Obtener gastos en el rango de fechas
+        gastos = db.query(models.Gasto).filter(
+            and_(
+                models.Gasto.fecha >= fecha_ini,
+                models.Gasto.fecha <= fecha_f
+            )
+        ).all()
+        
+        # Generar Excel
+        excel_buffer = report_generator.generar_reporte_excel_gastos(gastos, fecha_ini, fecha_f)
+        
+        return Response(
+            content=excel_buffer.read(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=reporte_gastos_{fecha_ini.strftime('%Y%m%d')}_{fecha_f.strftime('%Y%m%d')}.xlsx"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Formato de fecha inválido: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el reporte Excel: {str(e)}")
 
 
 # ========== ALERTAS ==========
